@@ -1,0 +1,2 @@
+/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/ar qc libparameters.a  CMakeFiles/parameters.dir/codegen/output/parameters.cpp.o CMakeFiles/parameters.dir/src/util/util.cpp.o CMakeFiles/parameters.dir/src/util/parameter_parser.cpp.o CMakeFiles/parameters.dir/codegen/output/cmd_parameters.cpp.o CMakeFiles/parameters.dir/src/util/timer.cpp.o
+/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/ranlib libparameters.a

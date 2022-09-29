@@ -110,7 +110,7 @@ struct FFMpegReader: Reader {
     }
 
     bool read(cv::Mat &frame) final {
-
+        std::cout << "Use the ffmpeg to read..." << std::endl;
         if (frame.empty()) {
             frame = cv::Mat(height, width, CV_8UC3);
         }
@@ -137,6 +137,7 @@ struct OpenCVReader : Reader {
     }
 
     bool read(cv::Mat &frame) final {
+        std::cout << "Use the opencv to read..." << std::endl;
         return videoCapture.read(frame);
     }
 

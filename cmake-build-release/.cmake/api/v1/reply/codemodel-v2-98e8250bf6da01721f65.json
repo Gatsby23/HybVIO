@@ -1,0 +1,221 @@
+{
+	"configurations" : 
+	[
+		{
+			"directories" : 
+			[
+				{
+					"build" : ".",
+					"childIndexes" : 
+					[
+						1,
+						2,
+						3,
+						4
+					],
+					"minimumCMakeVersion" : 
+					{
+						"string" : "3.0"
+					},
+					"projectIndex" : 0,
+					"source" : ".",
+					"targetIndexes" : 
+					[
+						2,
+						3,
+						4
+					]
+				},
+				{
+					"build" : "codegen",
+					"minimumCMakeVersion" : 
+					{
+						"string" : "3.0"
+					},
+					"parentIndex" : 0,
+					"projectIndex" : 1,
+					"source" : "codegen",
+					"targetIndexes" : 
+					[
+						0,
+						1
+					]
+				},
+				{
+					"build" : "src/tracker",
+					"minimumCMakeVersion" : 
+					{
+						"string" : "3.0"
+					},
+					"parentIndex" : 0,
+					"projectIndex" : 2,
+					"source" : "src/tracker",
+					"targetIndexes" : 
+					[
+						7
+					]
+				},
+				{
+					"build" : "src/slam",
+					"minimumCMakeVersion" : 
+					{
+						"string" : "3.0"
+					},
+					"parentIndex" : 0,
+					"projectIndex" : 3,
+					"source" : "src/slam",
+					"targetIndexes" : 
+					[
+						6
+					]
+				},
+				{
+					"build" : "test",
+					"minimumCMakeVersion" : 
+					{
+						"string" : "3.0"
+					},
+					"parentIndex" : 0,
+					"projectIndex" : 0,
+					"source" : "test",
+					"targetIndexes" : 
+					[
+						5
+					]
+				}
+			],
+			"name" : "Release",
+			"projects" : 
+			[
+				{
+					"childIndexes" : 
+					[
+						1,
+						2,
+						3
+					],
+					"directoryIndexes" : 
+					[
+						0,
+						4
+					],
+					"name" : "hybvio",
+					"targetIndexes" : 
+					[
+						2,
+						3,
+						4,
+						5
+					]
+				},
+				{
+					"directoryIndexes" : 
+					[
+						1
+					],
+					"name" : "codegen",
+					"parentIndex" : 0,
+					"targetIndexes" : 
+					[
+						0,
+						1
+					]
+				},
+				{
+					"directoryIndexes" : 
+					[
+						2
+					],
+					"name" : "tracker",
+					"parentIndex" : 0,
+					"targetIndexes" : 
+					[
+						7
+					]
+				},
+				{
+					"directoryIndexes" : 
+					[
+						3
+					],
+					"name" : "slam",
+					"parentIndex" : 0,
+					"targetIndexes" : 
+					[
+						6
+					]
+				}
+			],
+			"targets" : 
+			[
+				{
+					"directoryIndex" : 1,
+					"id" : "cmd_generated_parameters::@2146c942ebc480808f87",
+					"jsonFile" : "target-cmd_generated_parameters-Release-16003a6bd6c15f44dc3c.json",
+					"name" : "cmd_generated_parameters",
+					"projectIndex" : 1
+				},
+				{
+					"directoryIndex" : 1,
+					"id" : "generated_parameters::@2146c942ebc480808f87",
+					"jsonFile" : "target-generated_parameters-Release-0980f27ff76afc2316dc.json",
+					"name" : "generated_parameters",
+					"projectIndex" : 1
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "main::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-main-Release-34499fb51b5065f6184b.json",
+					"name" : "main",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "odometry::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-odometry-Release-89032af018a01f10475d.json",
+					"name" : "odometry",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "parameters::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-parameters-Release-f2fe33c519cb28c127d6.json",
+					"name" : "parameters",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 4,
+					"id" : "run-tests::@36f028580bb02cc8272a",
+					"jsonFile" : "target-run-tests-Release-11824d7bcc78abbd94af.json",
+					"name" : "run-tests",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 3,
+					"id" : "slam::@3ca6d5010a83d11c3f5c",
+					"jsonFile" : "target-slam-Release-d536486e72282654b494.json",
+					"name" : "slam",
+					"projectIndex" : 3
+				},
+				{
+					"directoryIndex" : 2,
+					"id" : "tracker::@81171ec3a2add9fd6b90",
+					"jsonFile" : "target-tracker-Release-fd7eff56c692efe9f478.json",
+					"name" : "tracker",
+					"projectIndex" : 2
+				}
+			]
+		}
+	],
+	"kind" : "codemodel",
+	"paths" : 
+	{
+		"build" : "/Users/robotics_qi/project_comment/VISUAL_WITH_IMU/HybVIO/cmake-build-release",
+		"source" : "/Users/robotics_qi/project_comment/VISUAL_WITH_IMU/HybVIO"
+	},
+	"version" : 
+	{
+		"major" : 2,
+		"minor" : 0
+	}
+}
