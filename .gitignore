@@ -5,6 +5,7 @@ target*
 *.png
 .idea/
 cmake-build-debug/
+cmake-build-release/
 .vscode
 .viscid
 __pycache__/
