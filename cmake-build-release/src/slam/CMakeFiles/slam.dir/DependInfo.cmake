@@ -46,6 +46,9 @@ set(CMAKE_TARGET_DEFINITIONS_CXX
 set(CMAKE_CXX_TARGET_INCLUDE_PATH
   "../src/slam/."
   "/usr/local/include"
+  "../3rdparty/mobile-cv-suite/build/host/include"
+  "../3rdparty/mobile-cv-suite/build/host/include/eigen3"
+  "../3rdparty/mobile-cv-suite/build/host/include/opencv4"
   )
 
 # Targets to which this target links.

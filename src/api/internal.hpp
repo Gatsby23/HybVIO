@@ -89,7 +89,7 @@ public:
 
     struct DebugParameters {
         Parameters api;
-        VisualizationMode visualization = VisualizationMode::DEBUG_VISUALIZATION;
+        VisualizationMode visualization = VisualizationMode::PLAIN_VIDEO;
 
         bool visualizePoseWindow = false; // used by commandline
         bool visualizePoseOverlay = false;

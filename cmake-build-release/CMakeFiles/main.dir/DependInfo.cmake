@@ -37,6 +37,8 @@ set(CMAKE_CXX_TARGET_INCLUDE_PATH
   "../3rdparty/mobile-cv-suite/build/host/include"
   "../3rdparty/mobile-cv-suite/build/host/include/eigen3"
   "../3rdparty/mobile-cv-suite/build/host/include/opencv4"
+  "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX12.3.sdk/System/Library/Frameworks/OpenGL.framework"
+  "/usr/local/include/eigen3"
   )
 
 # Targets to which this target links.

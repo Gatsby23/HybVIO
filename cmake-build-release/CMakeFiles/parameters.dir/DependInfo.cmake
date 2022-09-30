@@ -27,6 +27,9 @@ set(CMAKE_TARGET_DEFINITIONS_CXX
 
 # The include file search paths:
 set(CMAKE_CXX_TARGET_INCLUDE_PATH
+  "../3rdparty/mobile-cv-suite/build/host/include"
+  "../3rdparty/mobile-cv-suite/build/host/include/eigen3"
+  "../3rdparty/mobile-cv-suite/build/host/include/opencv4"
   )
 
 # Targets to which this target links.

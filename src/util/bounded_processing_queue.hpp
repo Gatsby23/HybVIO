@@ -61,6 +61,7 @@ private:
 };
 
 // Not thread-safe: Only access object from one thread
+// 这里并不是线程安全的
 template <class Item> class BoundedInputQueue {
 public:
     using Producer = std::function<bool(Item&)>;

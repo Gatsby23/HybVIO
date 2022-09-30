@@ -10,6 +10,8 @@
 #include <cmath>
 #include <mutex>
 
+#include <iostream>
+
 namespace {
 
 // Increasing this improves capability of SampleSync by using more memory
@@ -52,6 +54,7 @@ ProcessedFrame::ProcessedFrame(
     }
 }
 
+// 需要看这里如何做sample的同步.
 class SampleSyncImplmentation : public SampleSync {
 private:
     std::vector<std::unique_ptr<ProcessedFrame>> frames;
@@ -84,6 +87,7 @@ public:
     {
         // Adding the constant prevents the "sample being overwritten"
         // warning on very small values of `sampleSyncLag`.
+        // 不知道这里表示的含义是什么...
         int size = 100 + LEADER_FILL_RATIO * p.odometry.sampleSyncLag;
 
         // Negative time is used to indicate absence of sample.
@@ -196,10 +200,12 @@ public:
     }
 
     // Call on every follower sample (likely accelerometer).
+    // 将加速度计放到sample中，用来做数据同步.
     void addSampleFollower(double t, const api::Vector3d& p) final {
         std::lock_guard<std::mutex> lock(mutex);
         if (countF < sF.size()) countF++;
-
+        std::cout << "The count of acc is: " << countF << std::endl;
+        // 直接加到sF内存中.
         sF[indexF] = Sample {
             .t = t,
             .p = p,
@@ -210,6 +216,7 @@ public:
     }
 
     // Call on every leader sample (likely gyroscope).
+    // 将陀螺仪放到Sample中.
     void addSampleLeader(double t, const api::Vector3d& p) final {
         std::lock_guard<std::mutex> lock(mutex);
         if (countL < sL.size()) {

@@ -6,5 +6,5 @@ CXX_FLAGS =  -std=c++14 -Wall -Wextra -O2 -O3 -DNDEBUG -O2 -isysroot /Applicatio
 
 CXX_DEFINES = -DDAZZLING_GLFW_ENABLED -DDAZZLING_GPU_ENABLED -DEIGEN_DONT_PARALLELIZE -DEIGEN_MPL2_ONLY -DLOGGING_ENABLED -DUSE_DBOW2 -DUSE_LOGURU
 
-CXX_INCLUDES = -I/Users/robotics_qi/project_comment/VISUAL_WITH_IMU/HybVIO/src/slam/. -I/usr/local/include 
+CXX_INCLUDES = -I/Users/robotics_qi/project_comment/VISUAL_WITH_IMU/HybVIO/src/slam/. -I/usr/local/include -isystem /Users/robotics_qi/project_comment/VISUAL_WITH_IMU/HybVIO/3rdparty/mobile-cv-suite/build/host/include -isystem /Users/robotics_qi/project_comment/VISUAL_WITH_IMU/HybVIO/3rdparty/mobile-cv-suite/build/host/include/eigen3 -isystem /Users/robotics_qi/project_comment/VISUAL_WITH_IMU/HybVIO/3rdparty/mobile-cv-suite/build/host/include/opencv4 
 

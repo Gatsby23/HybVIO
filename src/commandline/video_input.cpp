@@ -26,17 +26,20 @@ private:
     std::unique_ptr<Reader> reader;
     cv::Mat resizeSource, colorSource;
     int resizeWidth = -1, resizeHeight = -1;
-
+    // 这里读取数据->一次读4个?
     static constexpr size_t BUFFER_SIZE = 4;
+    // 这里的QUE并不是数据安全
     util::BoundedInputQueue<cv::Mat> queue;
 
 public:
     VideoInputImplementation(const std::string &videoPath, std::unique_ptr<Reader> reader, bool ownThread, bool convertToGray) :
         videoPath(videoPath),
         reader(std::move(reader)),
+        // 不太清这个数据结构是怎么弄的->这里并不是数据安全的.
         queue(ownThread ? BUFFER_SIZE : 0, [this, convertToGray](cv::Mat &frame) -> bool {
             const bool resized = resizeWidth > 0;
             cv::Mat &target = convertToGray ? colorSource : (resized ? resizeSource : frame);
+            //
             if (this->reader->read(target)) {
                 if (convertToGray) {
                     cv::Mat &convertTarget = resized ? resizeSource : frame;
@@ -110,7 +113,6 @@ struct FFMpegReader: Reader {
     }
 
     bool read(cv::Mat &frame) final {
-        std::cout << "Use the ffmpeg to read..." << std::endl;
         if (frame.empty()) {
             frame = cv::Mat(height, width, CV_8UC3);
         }
@@ -129,6 +131,9 @@ struct FFMpegReader: Reader {
     }
 };
 
+/*****************************************************
+ * @brief 这里主要通过OpenCV Reader来进行视频数据解析和读取
+ *****************************************************/
 struct OpenCVReader : Reader {
     cv::VideoCapture videoCapture;
 
@@ -137,7 +142,6 @@ struct OpenCVReader : Reader {
     }
 
     bool read(cv::Mat &frame) final {
-        std::cout << "Use the opencv to read..." << std::endl;
         return videoCapture.read(frame);
     }
 
@@ -147,6 +151,15 @@ struct OpenCVReader : Reader {
 };
 }
 
+/***********************************************************************************
+ * @brief 这里是视频读取接口
+ * @param fileName 视频文件.
+ * @param convertVideoToGray 是不是将其转成灰度图.
+ * @param videoReaderThreads 这里表示是否将视频读取也放到当前线程中，设成false后，速度明显加快.
+ * @param ffmpeg             是否使用ffmpeg来处理视频（默认是用opencv中的video capture.）
+ * @param vf                 这里vf是ffmpeg用来解析数据时候用到的参数.
+ * @return 返回是视频读取类的实例化对象.
+ *********************************************************************************/
 std::unique_ptr<VideoInput> VideoInput::build(
         const std::string &fileName,
         const bool convertVideoToGray,

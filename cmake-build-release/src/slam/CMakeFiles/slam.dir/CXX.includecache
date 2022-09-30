@@ -82,10 +82,6 @@ cstring
 cassert
 -
 
-../3rdparty/mobile-cv-suite/build/host/include/accelerated-arrays/cpu/operations.hpp
-../standard_ops.hpp
-../3rdparty/mobile-cv-suite/build/host/include/accelerated-arrays/standard_ops.hpp
-
 ../3rdparty/mobile-cv-suite/build/host/include/accelerated-arrays/fixed_point.hpp
 limits
 -
@@ -3802,34 +3798,6 @@ static_settings.hpp
 ba_stats.hpp
 /Users/robotics_qi/project_comment/VISUAL_WITH_IMU/HybVIO/src/slam/ba_stats.hpp
 
-/Users/robotics_qi/project_comment/VISUAL_WITH_IMU/HybVIO/src/slam/feature_detector.cpp
-cassert
--
-cmath
--
-accelerated-arrays/image.hpp
--
-accelerated-arrays/standard_ops.hpp
--
-accelerated-arrays/cpu/image.hpp
--
-accelerated-arrays/cpu/operations.hpp
--
-feature_detector.hpp
-/Users/robotics_qi/project_comment/VISUAL_WITH_IMU/HybVIO/src/slam/feature_detector.hpp
-static_settings.hpp
-/Users/robotics_qi/project_comment/VISUAL_WITH_IMU/HybVIO/src/slam/static_settings.hpp
-image_pyramid.hpp
-/Users/robotics_qi/project_comment/VISUAL_WITH_IMU/HybVIO/src/slam/image_pyramid.hpp
-../tracker/image.hpp
-/Users/robotics_qi/project_comment/VISUAL_WITH_IMU/HybVIO/src/tracker/image.hpp
-../odometry/parameters.hpp
-/Users/robotics_qi/project_comment/VISUAL_WITH_IMU/HybVIO/src/odometry/parameters.hpp
-../util/logging.hpp
-/Users/robotics_qi/project_comment/VISUAL_WITH_IMU/HybVIO/src/util/logging.hpp
-../tracker/feature_detector.hpp
-/Users/robotics_qi/project_comment/VISUAL_WITH_IMU/HybVIO/src/tracker/feature_detector.hpp
-
 /Users/robotics_qi/project_comment/VISUAL_WITH_IMU/HybVIO/src/slam/feature_detector.hpp
 memory
 -
@@ -3838,16 +3806,6 @@ vector
 key_point.hpp
 /Users/robotics_qi/project_comment/VISUAL_WITH_IMU/HybVIO/src/slam/key_point.hpp
 
-/Users/robotics_qi/project_comment/VISUAL_WITH_IMU/HybVIO/src/slam/feature_search.cpp
-feature_search.hpp
-/Users/robotics_qi/project_comment/VISUAL_WITH_IMU/HybVIO/src/slam/feature_search.hpp
-algorithm
--
-functional
--
-vector
--
-
 /Users/robotics_qi/project_comment/VISUAL_WITH_IMU/HybVIO/src/slam/feature_search.hpp
 memory
 -
@@ -3855,12 +3813,6 @@ vector
 -
 key_point.hpp
 /Users/robotics_qi/project_comment/VISUAL_WITH_IMU/HybVIO/src/slam/key_point.hpp
-
-/Users/robotics_qi/project_comment/VISUAL_WITH_IMU/HybVIO/src/slam/id.cpp
-id.hpp
-/Users/robotics_qi/project_comment/VISUAL_WITH_IMU/HybVIO/src/slam/id.hpp
-cassert
--
 
 /Users/robotics_qi/project_comment/VISUAL_WITH_IMU/HybVIO/src/slam/id.hpp
 functional
@@ -3868,22 +3820,6 @@ functional
 unordered_map
 -
 unordered_set
--
-
-/Users/robotics_qi/project_comment/VISUAL_WITH_IMU/HybVIO/src/slam/image_pyramid.cpp
-image_pyramid.hpp
-/Users/robotics_qi/project_comment/VISUAL_WITH_IMU/HybVIO/src/slam/image_pyramid.hpp
-static_settings.hpp
-/Users/robotics_qi/project_comment/VISUAL_WITH_IMU/HybVIO/src/slam/static_settings.hpp
-../odometry/parameters.hpp
-/Users/robotics_qi/project_comment/VISUAL_WITH_IMU/HybVIO/src/odometry/parameters.hpp
-../util/logging.hpp
-/Users/robotics_qi/project_comment/VISUAL_WITH_IMU/HybVIO/src/util/logging.hpp
-opencv2/core.hpp
--
-opencv2/imgproc.hpp
--
-accelerated-arrays/opencv_adapter.hpp
 -
 
 /Users/robotics_qi/project_comment/VISUAL_WITH_IMU/HybVIO/src/slam/image_pyramid.hpp
@@ -4250,12 +4186,6 @@ opencv_viewer_data_publisher.hpp
 opencv2/core.hpp
 -
 
-/Users/robotics_qi/project_comment/VISUAL_WITH_IMU/HybVIO/src/slam/openvslam/essential_solver.cc
-essential_solver.h
-/Users/robotics_qi/project_comment/VISUAL_WITH_IMU/HybVIO/src/slam/openvslam/essential_solver.h
-random_array.h
-/Users/robotics_qi/project_comment/VISUAL_WITH_IMU/HybVIO/src/slam/openvslam/random_array.h
-
 /Users/robotics_qi/project_comment/VISUAL_WITH_IMU/HybVIO/src/slam/openvslam/essential_solver.h
 vector
 -
@@ -4287,20 +4217,6 @@ opencv2/core.hpp
 -
 
 /Users/robotics_qi/project_comment/VISUAL_WITH_IMU/HybVIO/src/slam/openvslam/orb_point_pairs.h
-
-/Users/robotics_qi/project_comment/VISUAL_WITH_IMU/HybVIO/src/slam/openvslam/random_array.cc
-random_array.h
-/Users/robotics_qi/project_comment/VISUAL_WITH_IMU/HybVIO/src/slam/openvslam/random_array.h
-random
--
-vector
--
-algorithm
--
-functional
--
-cassert
--
 
 /Users/robotics_qi/project_comment/VISUAL_WITH_IMU/HybVIO/src/slam/openvslam/random_array.h
 vector
@@ -4498,14 +4414,6 @@ Eigen/Dense
 pangolin/pangolin.h
 -
 
-/Users/robotics_qi/project_comment/VISUAL_WITH_IMU/HybVIO/src/slam/static_settings.cpp
-cmath
--
-static_settings.hpp
-/Users/robotics_qi/project_comment/VISUAL_WITH_IMU/HybVIO/src/slam/static_settings.hpp
-../odometry/parameters.hpp
-/Users/robotics_qi/project_comment/VISUAL_WITH_IMU/HybVIO/src/odometry/parameters.hpp
-
 /Users/robotics_qi/project_comment/VISUAL_WITH_IMU/HybVIO/src/slam/static_settings.hpp
 vector
 -
@@ -4557,16 +4465,6 @@ Eigen/Dense
 -
 ../api/vio.hpp
 /Users/robotics_qi/project_comment/VISUAL_WITH_IMU/HybVIO/src/api/vio.hpp
-
-/Users/robotics_qi/project_comment/VISUAL_WITH_IMU/HybVIO/src/tracker/feature_detector.hpp
-memory
--
-vector
--
-accelerated-arrays/image.hpp
--
-track.hpp
-/Users/robotics_qi/project_comment/VISUAL_WITH_IMU/HybVIO/src/tracker/track.hpp
 
 /Users/robotics_qi/project_comment/VISUAL_WITH_IMU/HybVIO/src/tracker/image.hpp
 Eigen/StdVector

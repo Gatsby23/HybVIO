@@ -9,9 +9,10 @@
 
 namespace util {
 
-/**
+/************************
  *  RAII timer
- */
+ *  @brief 计时器系统
+ ***********************/
 class TimeStats {
 private:
     std::unordered_map<std::string, double> timings;
@@ -20,6 +21,7 @@ private:
     std::mutex m;
 
 public:
+    // 内部时间类
     class Timer {
     public:
         Timer(TimeStats &stats, const char *name);

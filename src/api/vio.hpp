@@ -79,10 +79,11 @@ public:
     };
 
     // Output API, called when ever there is a new output available
+    // 结果输出api->通过这个来将结果输出出来？
     std::function<void(std::shared_ptr<const VioOutput>)> onOutput;
 
     // Thread-safe input API. These methods can be called from any thread
-
+    // 奇怪，这里的队列倒是线程安全的了.
     virtual void addAcc(double t, const Vector3d &sample) = 0;
 
     virtual void addGyro(double t, const Vector3d &sample) = 0;

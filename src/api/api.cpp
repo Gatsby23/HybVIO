@@ -112,6 +112,7 @@ public:
     // VioApi
 
     void addAcc(double t, const api::Vector3d &sample) final {
+        // TODO[Record Video...]
         if (recorder && parameters.recordInputs) {
             recorder->addAccelerometer(t, sample.x, sample.y, sample.z);
         }
@@ -748,6 +749,7 @@ private:
         for (size_t i = 0; i < maxSamples || (wasFrame && allFrames); ++i) {
             auto progress = control->processSyncedSamples(1);
             wasFrame = progress == odometry::Control::SampleProcessResult::FRAMES;
+            // 在这里得到输出
             if (wasFrame) getOutputIfAvailable();
             curProgress = progress != odometry::Control::SampleProcessResult::NONE;
             if (curProgress) anyProgress = true;

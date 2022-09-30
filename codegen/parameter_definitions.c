@@ -526,7 +526,7 @@ bool tracker.ffmpeg false
 // Video filters to apply to input video. Requires -ffmpeg.
 std::string tracker.vf ""
 // use own threads for video reading (faster and utilizes more CPU cores)
-bool tracker.videoReaderThreads true
+bool tracker.videoReaderThreads false
 // convert video to grayscale in VideoReader threads (can increase performance)
 bool tracker.convertVideoToGray false
 // Match grayscale pixel intensities of stereo frames to ease visual tracking between them.
