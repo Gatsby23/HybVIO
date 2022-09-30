@@ -127,7 +127,6 @@ struct Session : BackEnd {
     std::unique_ptr<tracker::Tracker> tracker;
     std::unique_ptr<slam::Slam> slam;
     Triangulator triangulator;
-    Eigen::Vector3d prevGyro;
     std::vector<int> blacklistedPrev;
     EKFStateIndex ekfStateIndex;
     SlamOdometryCoordinateTransformer coordTrans;
@@ -684,6 +683,7 @@ struct Session : BackEnd {
             .opticalFlowPredictor = opticalFlowPredictor,
             .poses = parameters.tracker.useStereoUpright2p ? &poses : nullptr,
         };
+        // 主要这里用的是特征点抽取的情况吧？
         tracker->add(args, trackerOutput);
 
         if (frame.taggedFrame) {
@@ -710,9 +710,12 @@ struct Session : BackEnd {
         }
     }
 
-    /**
+    /***********************************************
+     * @brief
+     * @param sample
+     * @param output
      * @return output is written if output != NONE
-     */
+     ***********************************************/
     ProcessResult process(SyncedSample& sample, Output &output) final {
         const ParametersOdometry& po = parameters.odometry;
 
@@ -723,15 +726,18 @@ struct Session : BackEnd {
 
         Eigen::Vector3d g(sample.l.x, sample.l.y, sample.l.z);
         Eigen::Vector3d a(sample.f.x, sample.f.y, sample.f.z);
-        prevGyro = g;
+        // 这里只是赋值，并没有其余操作，可以删了
 
+        // IMU初始化->这里只用了第一帧加速度计数据来进行初始化，不是特别合理
         if (!initializedOrientation) {
             ekf->initializeOrientation(a);
             initializedOrientation = true;
         }
 
         // KF predict.
+        // EKF进行预测
         ekf->predict(sample.t, g, a);
+        // 预测完后需要将旋转进行归一化
         ekf->normalizeQuaternions(true);
 
         // KF control updates.

@@ -115,6 +115,13 @@ public:
     }
 
     // Call on every processed frame.
+    /********************************
+     * @brief 对图像数据进行处理.
+     * @param t 图像数据对应的时间戳.
+     * @param firstGrayFrame
+     * @param secondGrayFrame
+     * @param taggedFrame
+     ********************************/
     void addFrame(
         double t,
         ImagePtr firstGrayFrame,
@@ -123,6 +130,7 @@ public:
     ) final {
         std::lock_guard<std::mutex> lock(mutex);
         // Negate to convert from camera to IMU time.
+        // 这里是做相机和IMU的时间对齐，做个初步的时间校正
         t -= parameters.imuToCameraShiftSeconds;
         t -= variableImuToCameraShift;
 
@@ -132,6 +140,9 @@ public:
             cullBuffer(frames);
         }
 
+        // 创建处理过的视觉帧
+        // 但是这里并没有看到计算特征点之类的
+        // 先创建frame类，后面再进行特征提取等操作【这里能不能并行加速？】
         auto frame = std::make_unique<ProcessedFrame>(
             t,
             std::move(firstGrayFrame),
@@ -141,6 +152,7 @@ public:
 
         frame->num = ++frameCount;
 
+        // 后面主要做同步相关的工作.
         if (parameters.sampleSyncSmartFrameRateLimiter) {
             inputThroughput.put(t);
             constexpr size_t FRAME_DROP_THRESHOLD = 2;
@@ -178,6 +190,7 @@ public:
                 first = false;
             }
         }
+        // ios设备上，数据是可能存在消耗等问题.
         if (first) {
             // It's normal for this to occur a few times during startup of the iOS app.
             // The frame cleanup code is simpler because we can assume
@@ -204,7 +217,6 @@ public:
     void addSampleFollower(double t, const api::Vector3d& p) final {
         std::lock_guard<std::mutex> lock(mutex);
         if (countF < sF.size()) countF++;
-        std::cout << "The count of acc is: " << countF << std::endl;
         // 直接加到sF内存中.
         sF[indexF] = Sample {
             .t = t,
@@ -219,6 +231,7 @@ public:
     // 将陀螺仪放到Sample中.
     void addSampleLeader(double t, const api::Vector3d& p) final {
         std::lock_guard<std::mutex> lock(mutex);
+        // 如果小于这个阈值，则先计数？【一直不太清楚为什么都在需要先计数，再加数据进来.】
         if (countL < sL.size()) {
             countL++;
         }

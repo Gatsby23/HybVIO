@@ -685,7 +685,7 @@ int run_algorithm(int argc, char *argv[], Visualizer &visualizer, CommandLinePar
                 double t;
                 api::Vector3d p;
                 input->getGyroscope(t, p);
-                // 添加到系统中
+                // 添加到VIO系统中
                 api.addGyro(t, { p.x, p.y, p.z });
                 // 如果要可视化IMU数据，则放到gyroVisu中.
                 if (main.displayImuSamples) gyroVisu.addSample(t, p);
@@ -873,10 +873,13 @@ int run_algorithm(int argc, char *argv[], Visualizer &visualizer, CommandLinePar
                 api::VioApi::ColorFormat colorFormat =
                     firstImage.channels == 1 ? api::VioApi::ColorFormat::GRAY : api::VioApi::ColorFormat::RGB;
 
+                // 在这里添加图像数据.
                 if (!cmd.parameters.tracker.useStereo) {
                     assert(t == frames[0].t);
+                    // 这里processMaybeOnGPU不知道是为什么
                     visualizer.processMaybeOnGpu([&]() {
                         if (firstImage.storageType == accelerated::Image::StorageType::CPU) {
+                            // 在这里添加图像数据
                             api.addFrameMonoVarying(
                                 frames[0].t,
                                 frames[0].intrinsic,

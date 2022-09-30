@@ -109,8 +109,7 @@ public:
             parameters);
     }
 
-    // VioApi
-
+    // 加速度数据是直接放进去，等待同步
     void addAcc(double t, const api::Vector3d &sample) final {
         // TODO[Record Video...]
         if (recorder && parameters.recordInputs) {
@@ -124,7 +123,9 @@ public:
         control->processAccelerometerSample(t, sample);
     }
 
+    // 添加陀螺仪数据，添加完数据后就进行同步一次.
     void addGyro(double t, const api::Vector3d &sample) final {
+        // 添加陀螺仪数据，添加完后就进行同步一次.
         addGyroInternal(t, sample, true);
     }
 
@@ -153,6 +154,16 @@ public:
         addFrameMonoVarying(t, emptyParams, w, h, data, colorFormat, tag);
     }
 
+    /**
+     * 添加图像数据
+     * @param t
+     * @param cam
+     * @param w
+     * @param h
+     * @param data
+     * @param colorFormat
+     * @param tag
+     *******************************/
     void addFrameMonoVarying(
         double t,
         const CameraParameters &cam,
@@ -163,6 +174,7 @@ public:
         std::unique_ptr<Image> inputImage = accelerated::cpu::Image::createReference(
             w, h, channels, accelerated::cpu::Image::DataType::UFIXED8,
             const_cast<std::uint8_t*>(data));
+
         addFrame(t, *inputImage, cam, tag);
     }
 
@@ -413,7 +425,14 @@ public:
             firstFrame, secondFrame);
     }
 
+    /******************************************************************************
+     * @brief 这里主要做消息队列同步.
+     * @param t 陀螺仪时间戳
+     * @param sample 陀螺仪测量数据
+     * @param processAll 是否进行同步
+     *****************************************************************************/
     void addGyroInternal(double t, const Vector3d &sample, bool processAll) final {
+        // TODO【Record】...
         if (recorder && parameters.recordInputs) {
             recorder->addGyroscope(t, sample.x, sample.y, sample.z);
         }
@@ -421,8 +440,11 @@ public:
         if (parameters.recordingOnly) return;
 
         assert(control && "input after GL cleanup");
+        // 放到消息队列中，等待同步.
         control->processGyroSample(t, sample);
+        //
         if (processAll) {
+            // 这里像线程池写法->用来同步处理数据.
             controlProcessingQueue.enqueue([this]() {
                 constexpr size_t MAX_SAMPLES = 2; // TODO: 1 could be enough
                 processSampleInternal(MAX_SAMPLES, true);
@@ -430,6 +452,8 @@ public:
         }
     }
 
+
+    // 似乎并没有用到？
     bool processSample() final {
         // processSample cannot be used together with the processing queue
         assert(controlProcessingQueue.maxSize() == 0);
@@ -562,7 +586,7 @@ private:
             if (!visuData) initVisu(inputImage.width, inputImage.height);
             taggedFrame = visuData->createTaggedFrame(tag, colorFrame);
         }
-
+        // 处理图像数据
         control->processFrame(t, std::move(grayImage), std::move(taggedFrame));
     }
 

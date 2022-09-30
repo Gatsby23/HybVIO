@@ -64,18 +64,20 @@ public:
         }
     }
 
+    // 将陀螺仪数据放到消息同步队列中，进行多传感器数据同步
     void processGyroSample(double t, const api::Vector3d &p) final {
         sampleSync->addSampleLeader(t, p);
     }
 
+    // 将加速度计数据放到消息同步队列中，进行多传感器数据同步
     void processAccelerometerSample(double t, const api::Vector3d &p) final {
         sampleSync->addSampleFollower(t, p);
     }
 
-    /**
+    /*******************************************************************
      * @param maxCount If > 0, process up to that many synced samples.
      * @return summary of what was processed
-     */
+     *******************************************************************/
     SampleProcessResult processSyncedSamples(int maxCount) final {
         const ParametersOdometry &po = parameters.odometry;
 
@@ -83,17 +85,22 @@ public:
 
         SyncedSample syncedSample;
         Output tmpOutput;
+        // 通过pollSyncedSample将多传感器数据合并成一个数据用于后面处理
         while (sampleSync->pollSyncedSample(syncedSample)) {
             // only process data from sample sync if session is active,
             // i.e., now in tracking state
+
             if (session) {
                 if (syncedSample.frame && odometry::TIME_STATS) {
                     odometry::TIME_STATS->startFrame();
                 }
+                // ...
                 const auto beResult = session->process(syncedSample, tmpOutput);
+                // 如果返回结果不是NONE，则代表图像数据进行了处理
                 if (beResult != BackEnd::ProcessResult::NONE) {
                     processedFrames++;
                 }
+                // 如果对时间进行了估计处理，则再进行补充
                 if (parameters.odometry.estimateImuCameraTimeShift) {
                     double shift = session->getEKF().getImuToCameraTimeShift();
                     sampleSync->setImuToCameraTimeShift(shift);
@@ -154,6 +161,8 @@ public:
         return SampleProcessResult::NONE;
     }
 
+    // 处理图像数据->注意这里都是放到processStereo中，
+    // 是双目还是单目主要是通过判断右目有没有数据.
     void processFrame(
         double t,
         ImagePtr grayFrame,
