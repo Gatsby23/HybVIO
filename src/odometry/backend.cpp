@@ -25,6 +25,7 @@
 #include <random>
 #include <queue>
 #include <accelerated-arrays/opencv_adapter.hpp> // TODO: handle somewhere else
+#include <iostream>
 
 namespace odometry {
 namespace {
@@ -175,6 +176,7 @@ struct Session : BackEnd {
         Eigen::VectorXd f, fblock;
         vecVector2d imageFeatures;
         vecVector2d featureVelocities;
+        // 这里是保存下来的pose，用来做pose graph.
         std::vector<slam::Pose> poseTrailForSlam;
         TriangulationArgsOut triangulationArgsOut;
         vecVector3f stereoPointCloud, stereoPointCloudColor;
@@ -395,23 +397,37 @@ struct Session : BackEnd {
         return uncertainty;
     }
 
+    /*******************************************************************
+     * @brief
+     * @param frame
+     * @param trackerOutput
+     * @param keyframe
+     * @param frameNumber
+     * @return 返回说明SLAM的操作是否成功.
+     *******************************************************************/
     bool applySlam(const ProcessedFrame &frame, const tracker::Tracker::Output &trackerOutput, bool keyframe, int frameNumber) {
         bool wasSlamFrame = false;
 
         // happens if either USE_SLAM or slam.useSlam is disabled
         if (!slam) return wasSlamFrame;
 
+        // 这里应该说的是至少隔4帧才会作为SLAM的keyframe来进行处理
         // Example: keyframeCandidateInterval = 4, delayIntervalMultiplier = 0
         // Frame           00 01 02 03 04 05 06 07 08 ..
         // Slam            00          04          08
         // Result                      00          04
+        // 不太清楚这里的q是什么意思？
         // Example: keyframeCandidateInterval = 4, delayIntervalMultiplier = 2
         // Frame           00 01 02 03 04 05 06 07 08 09 10 11 12 13 14 15 16 ..
         // Slam            q           q           00          04          08
         // Result                                              00          04
+        // 在论文呢原文中:
+        //The result is read asynchronously on the next key frame candidate, which we add every N = 8 frames.
         const unsigned interval = parameters.slam.keyframeCandidateInterval;
         const int delayMultiplier = parameters.slam.delayIntervalMultiplier;
         const unsigned resultFrameDelay = interval * (delayMultiplier + 1);
+        // 这里的sync是代表什么呢？
+
         const bool syncSlam = delayMultiplier < 0;
 
         if (!keyframe && (!syncSlam || interval > 1)) return wasSlamFrame;
@@ -424,6 +440,7 @@ struct Session : BackEnd {
 
         const unsigned currentFrame = slamFrameCounter++;
 
+        // 每隔八张图像才会作为一次keyframe来进行slam优化.
         if (currentFrame % parameters.slam.keyframeCandidateInterval != 0) {
             return wasSlamFrame;
         }
@@ -438,6 +455,7 @@ struct Session : BackEnd {
 
         cv::Mat slamColorFrame;
         if (hasCpuColorFrame) {
+            // 这里是将accelerated::opencv frame 转换成 cv::Mat.
             slamColorFrame = accelerated::opencv::ref(*frame.taggedFrame->colorFrame);
             if (parameters.tracker.useStereo) slamColorFrame = slamColorFrame(frame.taggedFrame->firstImageRect);
         }
@@ -461,16 +479,20 @@ struct Session : BackEnd {
 
         auto &odoPoseTrail = tmp.poseTrailForSlam;
         odoPoseTrail.clear();
+
+        // 这里是构建一系列的pose，先利用VIO的结果来进行pose之间的uncertainty的构建，构建完之后，将pose放到一个delay的滑窗中，然后再来做Pose graph的优化.
         for (unsigned index = interval * unsigned(std::max(0, delayMultiplier)); index < ekfStateIndex.poseTrailSize() - 1; index++) {
             Eigen::Matrix<double, 3, 6> uncertainty;
             unsigned prevIndex = index + 1;
             if (prevIndex < ekfStateIndex.poseTrailSize() - 1) {
+                // 计算出来每一帧odometry和其他帧odometry之间的置信度.
                 uncertainty = odometryUncertainty(index, prevIndex);
             } else {
                 // Previous pose is outside cam trail. This is OK, see handling in SLAM
                 uncertainty.setZero();
             }
 
+            // 如果index是0的话，就先放进去，因为visual update还不一定弄完.
             if (index == 0) {
                 // Current frame is a special case, because visual update might not have been done
                 odoPoseTrail.push_back(
@@ -498,11 +520,13 @@ struct Session : BackEnd {
             if (!parameters.slam.useOdometryPoseTrailDelta) break;
         }
 
+        // 如果odoPoseTrail是空的话....
         if (odoPoseTrail.empty()) {
             assert(!keyframe);
             return wasSlamFrame;
         }
 
+        // 添加KeyFrame....
         slamResult = slam->addFrame(
             nextFrame.slamFrame,
             odoPoseTrail,
@@ -517,17 +541,24 @@ struct Session : BackEnd {
         return wasSlamFrame;
     }
 
+    // 得到之前的SLAM结果？？
     void applySlamResult(int resultFrameDelay) {
         // Get the previous SLAM result (computed asynchronously).
         assert(slamResult.valid());
         slam::Slam::Result result = slamResult.get();
+        // 先将结果转换坐标系->变成world->camera的顺序（那之前的IMU顺序应该是body->world？）.
+
         coordTrans.setCoordinates(
             odometryToWorldToCamera(resultFrameDelay),
             result.poseMat);
 
+        // SLAM的跟踪清楚？SLAM的跟踪和VIO里的有什么区别？
         slamTracks.clear();
+        // SLAM点云也清楚，为啥呢？
         slamPointCloud.clear();
+
         int id = 0;
+        // 这里是在做什么？
         for (const slam::Slam::Result::MapPoint &mp : result.pointCloud) {
             if (mp.trackId >= 0) slamTracks[mp.trackId] = id;
             auto mp1 = mp;
@@ -713,7 +744,7 @@ struct Session : BackEnd {
     /***********************************************
      * @brief
      * @param sample
-     * @param output
+     * @param output 这里是为了可视化输出.
      * @return output is written if output != NONE
      ***********************************************/
     ProcessResult process(SyncedSample& sample, Output &output) final {
@@ -729,6 +760,7 @@ struct Session : BackEnd {
         // 这里只是赋值，并没有其余操作，可以删了
 
         // IMU初始化->这里只用了第一帧加速度计数据来进行初始化，不是特别合理
+        // 这里不太好的地方是单帧数据，并不是序列数据->初始化的时候需要处理
         if (!initializedOrientation) {
             ekf->initializeOrientation(a);
             initializedOrientation = true;
@@ -825,6 +857,7 @@ struct Session : BackEnd {
                 }
             }
 
+            // 只有开启SLAM模式后，这里系统才会进行进一步操作.
             slamFrame = applySlam(*sample.frame, trackerOutput, keyframe, sample.frame->num);
 
             // Prepare visualization output.

@@ -15,7 +15,7 @@ Eigen::MatrixXd der_check(
     const Eigen::VectorXd& der_at,
     const std::function< Eigen::VectorXd(const Eigen::VectorXd&) >& numeric,
     const std::function< Eigen::MatrixXd(const Eigen::VectorXd&) >& analytic,
-    bool print = false);
+    bool print = true);
 
 std::vector<int> buildRange(int end);
 

@@ -100,10 +100,11 @@ public:
                 if (beResult != BackEnd::ProcessResult::NONE) {
                     processedFrames++;
                 }
-                // 如果对时间进行了估计处理，则再进行补充
+                // 如果对时间进行了估计处理，则弥补IMU和Camera之间的时间偏移.
                 if (parameters.odometry.estimateImuCameraTimeShift) {
                     double shift = session->getEKF().getImuToCameraTimeShift();
                     sampleSync->setImuToCameraTimeShift(shift);
+                    // 如果偏移量太大，则证明....
                     if (std::abs(shift) > imuToCameraTimeShiftThresholdSeconds) {
                         // The odometry may well work above the threshold, but warn in case
                         // the variable could "explode" into non-sensical values.

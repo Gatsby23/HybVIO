@@ -296,6 +296,7 @@ struct EKFImplementation : public EKF {
     }
 
     // Initialize odometry orientation from an accelerometer sample.
+    // 通过加速度计数据来进行重力对齐，做初始对齐.
     void initializeOrientation(const Eigen::Vector3d &xa) {
         const ParametersOdometry& po = parameters.odometry;
         Eigen::Quaterniond qq = Eigen::Quaterniond::FromTwoVectors(-gravity, xa);
@@ -317,6 +318,12 @@ struct EKFImplementation : public EKF {
     }
 
     // EKF prediction step.
+    /**************************************************************
+     * @brief EKF当中的预测步骤，这里需要注意的是EKF当中的状态量方向问题.
+     * @param t 当前IMU数据的测量值
+     * @param xg 当前IMU数据中的角速度值
+     * @param xa 当前IMU数据当中的加速度计值
+     ***************************************************************/
     void predict(double t, const Eigen::Vector3d &xg, const Eigen::Vector3d &xa) {
         // Variable notation:
         // xg: gyro measurement (in device coordinates)
@@ -339,11 +346,13 @@ struct EKFImplementation : public EKF {
         //
         // The formulas, using the variable names:
         //
+        // IMU预积分部分.
         // p_new = v * dt + p
         // q_new = A * q
         // v_new = (R' * (T * xa - ba + ea) + gravity) * dt + v
         // where
         // A = exp(-0.5 * S)
+        // 注意到这里，和传统MSCKF不同的地方，并不是直接w = xg - bg - eg【这是后面F和Q主要不一样的地方】.
         // S = S(w) 4x4 matrix, where w = xg - bg + eg
         // R = quat2rmat(q_new)
         //
@@ -354,10 +363,12 @@ struct EKFImplementation : public EKF {
 
         timer(odometry::TIME_STATS, "KF predict");
 
+        // 测量数据时间间隔计算，如果是第一帧，则进行赋值，如果是后续帧，则直接相减得到IMU之间的间隔值.
         double dt = 0.0;
         if (!firstSample) {
             dt = t - prevSampleT;
             time = t - firstSampleT;
+
         }
         else {
             firstSampleT = t;
@@ -394,6 +405,8 @@ struct EKFImplementation : public EKF {
         // However, the nature of the gyro bias behavior (it appears at a higher level in the dynamical
         // model) is quite different from the acc bias, so there is no guarantee that it works in a same way.
         // ”
+
+        // 这里BAA代表...，如果这里有值，则代表....
         if (parameters.odometry.noiseProcessBAA > 0.0) {
             const double qc = pow2(parameters.odometry.noiseProcessBAA);
             const double theta = parameters.odometry.noiseProcessBAARev;
@@ -402,6 +415,8 @@ struct EKFImplementation : public EKF {
                 Q.block(Q_BAA_DRIFT, Q_BAA_DRIFT, 3, 3) *= (1 - exp(-2 * dt * theta)) / (2 * theta);
             }
         }
+
+        // 这里BGA代表....，如果这里BGA的值大于0，则...
         if (parameters.odometry.noiseProcessBGA > 0.0) {
             const double qc = pow2(parameters.odometry.noiseProcessBGA);
             const double theta = parameters.odometry.noiseProcessBGARev;
@@ -412,6 +427,7 @@ struct EKFImplementation : public EKF {
         }
 
         // Gyro rotation
+        // 计算出来旋转部分，从b_k -> b_{k+1}
         const Eigen::Vector3d w = xg - m.segment(BGA, 3);
         Eigen::Matrix4d S;
         S <<
@@ -422,24 +438,29 @@ struct EKFImplementation : public EKF {
 
         // Quaternion rotation from gyroscope
         S *= -dt / 2;
+        // The A is the rotation between R_{k} -> R_{k+1}
         Eigen::Matrix4d A = S.exp();
 
         // Rotation from quaternion and the derivative
+        // 这里的dR代表的含义是：
         Eigen::Matrix3d dR[4];
+        // THe R is the world -> local.
         Eigen::Matrix3d R = odometry::util::quat2rmat_d(A * m.segment(ORI, 4), dR);
 
-        // Position
+        // Position（如前面描述：p_new = v * dt + p）
         m.segment(POS, 3) += m.segment(VEL, 3) * dt;
 
-        // Velocity
+        // Velocity【这里能看出来IMU的body坐标系中是以GYR作为BODY系的】
         Eigen::Vector3d Txab = m.segment(BAT, 3).asDiagonal() * xa - m.segment(BAA, 3);
         m.segment(VEL, 3) += (R.transpose() * Txab + gravity) * dt;
 
         // Orientation
+        // 对应的旋转
         Eigen::Vector4d prevQuat = m.segment(ORI, 4);
         m.segment(ORI, 4) = A * m.segment(ORI, 4);
 
         // BGA and BAA mean reversion
+        // 公式（4）->这里和传统IMU高斯建模方式不一样[这里重要吗？].
         if (parameters.odometry.noiseProcessBAA > 0.0) {
             m.segment(BAA, 3) *= exp(-dt * parameters.odometry.noiseProcessBAARev);
         }
@@ -447,6 +468,16 @@ struct EKFImplementation : public EKF {
             m.segment(BGA, 3) *= exp(-dt * parameters.odometry.noiseProcessBGARev);
         }
 
+        // 将dydx给推导出来
+        // 对角阵上每一个元素都是Identity，其中位置和速度的地方是Identity * dt（）
+        /*************************************************
+         *       ORI POS  VEL     BAA BGA
+         *   ORI  I
+         *   POS      I   I△t
+         *   VEL           I
+         *   BAA                 I
+         *   BGA                     I
+         ***********************************************/
         dydx.block(POS, POS, 3, 3).setIdentity(3, 3);
         dydx.block(VEL, VEL, 3, 3).setIdentity(3, 3);
         dydx.block(POS, VEL, 3, 3).setIdentity(3, 3) *= dt;
@@ -455,15 +486,29 @@ struct EKFImplementation : public EKF {
         dydx.block(BAT, BAT, 3, 3).setIdentity(3, 3);
 
         // Derivatives of the velocity w.r.t. to the quaternion
+        // 这里应该是和前面配合的简化写法->应该没必要这么复杂，就是相当于叉乘得到的结果.
+        /**************************************************************
+         *       ORI                      POS   VEL     BAA BGA
+         *   ORI  I
+         *   POS                           I    I△t
+         *   VEL  (a*△t)*R*^*R_{kk+1}            I
+         *   BAA                                         I
+         *   BGA                                             I
+         **************************************************************/
+         // 这里写的很恶心->就是将叉车反过来a×b=-b×a
         for (int i = 0; i < 4; i++) {
             dydx.block(VEL, ORI + i, 3, 1) = dR[i].transpose() * Txab * dt;
         }
+        // 这里得到的结果应该是叉乘？
+        // 这里一应该直接得到就好.
         dydx.block(VEL, ORI, 3, 4) = dydx.block(VEL, ORI, 3, 4) * A;
 
         // Derivatives of the quaternion w.r.t. itself
+        // 这里对应的是R^{i_{k+1}}_{i_k}部分，没多大问题.
         dydx.block(ORI, ORI, 4, 4) = A;
 
         // Derivatives of the velocity w.r.t. acceleration noise
+        // 这里dy/dq速度和Q_acc的对应部分和dy/dx中的vel,Q_acc部分对应一样.
         dydq.block(VEL, Q_ACC, 3, 3) = R.transpose() * dt;
 
         // Derivatives of the quaternion w.r.t. gyroscope noise
@@ -471,9 +516,11 @@ struct EKFImplementation : public EKF {
         dS0 << 0, dt / 2, 0, 0, -dt / 2, 0, 0, 0, 0, 0, 0, dt / 2, 0, 0, -dt / 2, 0;
         dS1 << 0, 0, dt / 2, 0, 0, 0, 0, -dt / 2, -dt / 2, 0, 0, 0, 0, dt / 2, 0, 0;
         dS2 << 0, 0, 0, dt / 2, 0, 0, dt / 2, 0, 0, -dt / 2, 0, 0, -dt / 2, 0, 0, 0;
+        // 这里是不是写的太复杂了？实际上对应的就是旋转乘以1/2的变化？
         dydq.block(ORI, Q_GYRO, 4, 1) = A * dS0 * prevQuat;
         dydq.block(ORI, Q_GYRO + 1, 4, 1) = A * dS1 * prevQuat;
         dydq.block(ORI, Q_GYRO + 2, 4, 1) = A * dS2 * prevQuat;
+        // 直接是I，没问题.
         dydq.block(BGA, Q_BGA_DRIFT, 3, 3).setIdentity(3, 3);
         dydq.block(BAA, Q_BAA_DRIFT, 3, 3).setIdentity(3, 3);
 
@@ -486,6 +533,7 @@ struct EKFImplementation : public EKF {
         dydq.block(VEL, Q_GYRO, 3, 3) = dydx.block(VEL, ORI, 3, 4) * dydq.block(ORI, Q_GYRO, 4, 3);
 
         // Derivatives of the velocity w.r.t. to the gyro bias
+        // 这里为什么是负号？理论上应该是一样的？
         dydx.block(VEL, BGA, 3, 3) = -dydq.block(VEL, Q_GYRO, 3, 3);
 
         // Derivatives of the quaternion w.r.t. to the gyro bias
@@ -501,7 +549,9 @@ struct EKFImplementation : public EKF {
         //     P = dydx * P * dydx' + dydq * Q * dydq'
         // by exploiting the structure of `dydx` which is a block matrix with a large identity
         // block sided by two zero blocks.
-        P.topLeftCorner<INER_DIM, INER_DIM>() = dydx * P.topLeftCorner<INER_DIM, INER_DIM>() * dydx.transpose() + dydq * Q * dydq.transpose();
+        // 这里更新倒是没有什么问题了.
+        P.topLeftCorner<INER_DIM, INER_DIM>() = dydx * P.topLeftCorner<INER_DIM, INER_DIM>() * dydx.transpose()
+                                                + dydq * Q * dydq.transpose();
         tmpP0.noalias() = P.leftCols<INER_DIM>().bottomRows(stateDim - INER_DIM) * dydx.transpose();
         P.block(INER_DIM, 0, stateDim - INER_DIM, INER_DIM) = tmpP0;
         tmpP0.noalias() = dydx * P.topRows<INER_DIM>().rightCols(stateDim - INER_DIM);

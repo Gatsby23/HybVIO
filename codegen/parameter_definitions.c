@@ -150,6 +150,7 @@ double odometry.noiseProcessAcc 0.003
 double odometry.noiseProcessGyro 0.00017
 
 // BAA process noise (standard deviation, 0 to disable)
+// 这个还是很重要[打开和关闭后，得到的结果是完全不一样.][基于论文35]
 double odometry.noiseProcessBAA 1e-4
 // BGA process noise (standard deviation, 0 to disable)
 double odometry.noiseProcessBGA 0
@@ -436,9 +437,11 @@ unsigned slam.backendProcessDelay 0
 bool slam.copyPartialMapToFrontend true
 // When true slam map is copied at fixed frames to ensure deterministic outcome
 bool slam.deterministicSlamMapCopy true
+// 似乎这里是frame的延长帧，看SLAM中的滑窗是多长.
 // how many times keyframeCandidateInterval we delay the slam calculations to get better pose trail from odometry, keyframeCandidateInterval=4 delayIntervalMultiplier=2 => 8 frames
 // Crashes unless cameraTrailLength > keyframeCandidateInterval * (delayIntervalMultiplier + 1)
-int slam.delayIntervalMultiplier 1
+// 我今天先给他打开
+int slam.delayIntervalMultiplier -1
 // Do not let the PIVO -> SLAM transformations tilt the z-axis
 bool slam.removeOdometryTransformZAxisTilt true
 // When enabled, uses delta between odometry posetrail for odometry priors
