@@ -168,6 +168,7 @@ TriangulatorStatus Triangulator::triangulate(
         .derivativeTest = args.derivativeTest,
         .imuToCameraTimeShift = args.imuToCameraTimeShift,
     };
+    // 这里是构建三角点的方法
     pf = triangulateWithTwoCameras(twoArgs, &dpfTwoCameras);
     assert(!pf.hasNaN());
     // `pf` and rest of this function take place in the coordinates of `ind0`.

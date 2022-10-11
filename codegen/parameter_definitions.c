@@ -441,7 +441,7 @@ bool slam.deterministicSlamMapCopy true
 // how many times keyframeCandidateInterval we delay the slam calculations to get better pose trail from odometry, keyframeCandidateInterval=4 delayIntervalMultiplier=2 => 8 frames
 // Crashes unless cameraTrailLength > keyframeCandidateInterval * (delayIntervalMultiplier + 1)
 // 我今天先给他打开
-int slam.delayIntervalMultiplier -1
+int slam.delayIntervalMultiplier 1
 // Do not let the PIVO -> SLAM transformations tilt the z-axis
 bool slam.removeOdometryTransformZAxisTilt true
 // When enabled, uses delta between odometry posetrail for odometry priors

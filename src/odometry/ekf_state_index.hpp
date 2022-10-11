@@ -77,16 +77,18 @@ struct KeyFrame {
     }
 };
 
+// 这里应该主要说的是EKF当中的滑窗情况，里面包含了用到的关键帧和特征点.
 class EKFStateIndex {
 private:
     const odometry::ParametersOdometry &parameters;
     std::vector<KeyFrame> keyframes;
     int frameCounter = 0;
-    /**
+    /****************************************************************
+     * 这里可以看出来hybrid代表的是估计的状态量中有没有包含视觉特征在里面
      * 3D map points in the EKF state (hybrid EKF-SLAM approach).
      * Each element is a feature track ID (which is also used as the
      * map point ID). Id -1 means empty / unused
-     */
+     *****************************************************************/
     std::vector<int> mapPoints;
     std::vector<int> tmpIndex;
 
@@ -109,6 +111,7 @@ public:
     bool canPopKeyframe() const { return keyframes.size() >= 2; }
 
     /** @return the index of the least useful removed keyframe */
+    /** 这里head主要是？ */
     int pushHeadKeyframe(int frameNumber, double timestamp);
     void popHeadKeyframe();
 
@@ -121,9 +124,10 @@ public:
         std::mt19937 &rng
     );
 
-    /**
+    /*****************************************************
      * @param index The output: indices 0,1,2,...,poseCount
-     */
+     * 这里主要是将index标号给做好.
+     *****************************************************/
     void createFullIndex(std::vector<int> &index) const;
 
     void markTrackUsed(
@@ -136,6 +140,9 @@ public:
      * Remove all keyframes that do not share any tracks with the current frame.
      * Also remove all map points not visible in the current frame
      */
+     /**
+      *
+      */
     void prune();
     /**
      * Offer a new point to the state. Accepted if there are free slots.
@@ -153,12 +160,12 @@ public:
 
     KeyFrame &headKeyFrame() { return keyframes.at(0); }
 
-    /**
+    /**************************************************************************
      * @param trackId track ID
      * @param imagePoint (output) "current" pixel coordinates, if available.
      *  This may be the head or the first pose trail (non-head) entry
      * @return true iff the the output was set
-     */
+     **************************************************************************/
     bool getCurrentTrackPixelCoordinates(int trackId, Eigen::Vector2f &imagePoint) const;
 
     void buildTrackVectors(
@@ -170,6 +177,7 @@ public:
         bool stereo
     ) const;
 
+    // 输出....
     std::size_t poseTrailSize() const { return keyframes.size(); }
 
     /**
@@ -190,6 +198,12 @@ public:
         Eigen::Vector2d &imagePoint0,
         Eigen::Vector2d &imagePoint1) const;
 
+    /*********************************************************
+     * 构建出3D特征.
+     * @param trackId
+     * @param index
+     * @param camPoseTrail
+     ********************************************************/
     void extract3DFeatures(
         int trackId,
         const std::vector<int> &index,

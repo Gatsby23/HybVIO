@@ -526,7 +526,7 @@ struct Session : BackEnd {
             return wasSlamFrame;
         }
 
-        // 添加KeyFrame....
+        // 添加KeyFrame....->这里addFrame感觉是添加任务.
         slamResult = slam->addFrame(
             nextFrame.slamFrame,
             odoPoseTrail,
@@ -544,6 +544,7 @@ struct Session : BackEnd {
     // 得到之前的SLAM结果？？
     void applySlamResult(int resultFrameDelay) {
         // Get the previous SLAM result (computed asynchronously).
+        // 这里是之前的结果直接计算得到的吗？
         assert(slamResult.valid());
         slam::Slam::Result result = slamResult.get();
         // 先将结果转换坐标系->变成world->camera的顺序（那之前的IMU顺序应该是body->world？）.
@@ -801,7 +802,7 @@ struct Session : BackEnd {
 
         if (sample.frame != nullptr) {
             const bool fullVisualUpdate = sample.frame->num % po.visualUpdateForEveryNFrame == 0 || !ekfStateIndex.canPopKeyframe();
-
+            // trackerOutput是用来作为可视化使用
             auto &trackerOutput = tmp.trackerOutput;
             applyTracker(*sample.frame, trackerOutput);
             // note: should actually do the stationarity checks from the last
@@ -815,11 +816,14 @@ struct Session : BackEnd {
             } else {
                 framesSinceKeyframe++;
             }
+            // 这里做了一个简化->keyframe之后的连续三帧都不是keyframe的话，则认为场景变化不大，则证明是静止（感觉还是不太对）
             stationaryVisual = framesSinceKeyframe >= po.visualStationarityFrameCountThreshold;
             if (po.useVisualStationarity && stationaryVisual) {
                 ekf->updateZupt(po.visualZuptR);
             }
 
+            // 实际上到目前为止我还没理解sharedData是用来做什么.
+            // SharedData，EKFStateIndex这些到底是用来做什么
             if (sharedData->odometryDebugAPI && sharedData->odometryDebugAPI->publisher) {
                 sharedData->odometryDebugAPI->publisher->startFrame(*ekf, ekfStateIndex, parameters);
             }
@@ -827,7 +831,9 @@ struct Session : BackEnd {
             // causes every Nth (key)frame to be left in the trail
             if (!fullVisualUpdate) keyframe = false;
 
+            // 开始进行视觉更新.
             if (po.visualUpdateEnabled) {
+                // 这里
                 if (!keyframe) {
                     ekfStateIndex.popHeadKeyframe();
                     ekf->updateUndoAugmentation();
@@ -837,11 +843,14 @@ struct Session : BackEnd {
                 head.frameNumber = sample.frame->num;
                 head.timestamp = sample.t;
 
+                // 用来做视觉更新.
                 const bool goodFrame = trackerVisualUpdate(sample, trackerOutput, output, fullVisualUpdate, stationaryVisual);
 
+                // 这里是....
                 int droppedPose = ekfStateIndex.pushHeadKeyframe(sample.frame->num, sample.t);
                 ekf->updateVisualPoseAugmentation(droppedPose - 1); // different indexing
 
+                // 这里是fully Visual Update是什么
                 if (fullVisualUpdate) {
                     visualUpdateCounter.put(goodFrame ? 1.0f : 0.0f);
                     if  (visualUpdateCounter.entries() > visualUpdateCounter.maxSize() / 2) {
@@ -860,7 +869,7 @@ struct Session : BackEnd {
             // 只有开启SLAM模式后，这里系统才会进行进一步操作.
             slamFrame = applySlam(*sample.frame, trackerOutput, keyframe, sample.frame->num);
 
-            // Prepare visualization output.
+            // Prepare visualization output->这里是用来做可视化界面的输出.
             if (sample.frame->taggedFrame != nullptr) {
                 // modify, but don't take ownership of the TaggedFrame
                 auto &outputFrame = *sample.frame->taggedFrame;
@@ -927,6 +936,15 @@ struct Session : BackEnd {
     }
 
     // Loop tracks and do visual updates using them.
+    /**
+     *
+     * @param sample -> 融合的多源数据包.
+     * @param trackerOutput -> tracker的结果输出.
+     * @param output -> 结果的输出.
+     * @param fullVisualUpdate
+     * @param stationaryVisual
+     * @return
+     */
     bool trackerVisualUpdate(
         SyncedSample &sample,
         const tracker::Tracker::Output &trackerOutput,
@@ -945,6 +963,7 @@ struct Session : BackEnd {
         tmp.blacklisted.clear();
         tmp.trackOrder.clear();
 
+        // 这里是依据tracker的结果来做.
         for (unsigned i = 0; i < trackerOutput.tracks.size(); ++i) {
             const auto &track = trackerOutput.tracks.at(i);
 
@@ -1048,6 +1067,7 @@ struct Session : BackEnd {
             fbatch = Eigen::VectorXd::Zero(maxUpdateSize);
         }
 
+        // 这里的tmp.trackOder是每一个tracker的情况.
         for (const unsigned trackIndex : tmp.trackOrder) {
             stats.visualUpdate.newTrack();
 
@@ -1086,7 +1106,9 @@ struct Session : BackEnd {
 
             tmp.imageFeatures.clear();
             tmp.featureVelocities.clear();
+            // 是多个像素块来更新还是每个feature来进行更新？
             auto &y = batchUpdate ? tmp.yblock : tmp.y;
+            // 构建追踪向量
             ekfStateIndex.buildTrackVectors(track.id, tmp.poseTrailIndex, tmp.imageFeatures,
                 tmp.featureVelocities, y, parameters.tracker.useStereo);
 
@@ -1094,8 +1116,10 @@ struct Session : BackEnd {
             extractCameraPoseTrail(*ekf, tmp.poseTrailIndex,
                 parameters, parameters.tracker.useStereo, tmp.trail);
 
-            if (po.useIndependentStereoTriangulation)
+            // 这里应该是双目的使用情况，直接通过双目来构建特征点.
+            if (po.useIndependentStereoTriangulation) {
                 ekfStateIndex.extract3DFeatures(track.id, tmp.poseTrailIndex, tmp.trail);
+            }
 
             if (sharedData->odometryDebugAPI && sharedData->odometryDebugAPI->publisher) {
                 sharedData->odometryDebugAPI->publisher->startVisualUpdate(
@@ -1128,6 +1152,8 @@ struct Session : BackEnd {
                     .calculateDerivatives = true,
                     .estimateImuCameraTimeShift = parameters.odometry.estimateImuCameraTimeShift,
                 };
+                // 这里是进行三角化->Build the 3D Features.
+                // 现在得明确哪块三角化的点用来做更新.
                 triangulateStatus = triangulator.triangulate(args, triangulationOut,
                     sharedData->odometryDebugAPI);
 
@@ -1142,6 +1168,7 @@ struct Session : BackEnd {
                     o.dpfdp.clear();
                     o.dpfdq.clear();
                 }
+
                 if (parameters.tracker.useStereo && triangulateStatus == TriangulatorStatus::OK) {
                     // Sum the stereo contributions per pose.
                     const size_t n = tmp.poseTrailIndex.size();
@@ -1206,9 +1233,11 @@ struct Session : BackEnd {
                         ekf->insertMapPoint(mapPointIndex, triangulationOut.pf);
                         // could already do a another visual update, with this track but skipping for simplicity
                     } else {
+                        // 如果是批量更新.
                         if (batchUpdate) {
                             const int curBlockSize = H.rows();
                             if (currentUpdateSize + curBlockSize > maxUpdateSize) {
+                                // 这里来做bias更新.
                                 ekf->updateVisualTrack(
                                     Hbatch.topRows(currentUpdateSize),
                                     fbatch.head(currentUpdateSize),
@@ -1221,6 +1250,7 @@ struct Session : BackEnd {
                             fbatch.segment(currentUpdateSize, curBlockSize) = f;
                             currentUpdateSize += curBlockSize;
                         } else {
+                            // 如果不是批量更新.
                             ekf->updateVisualTrack(H, f, y, visualR);
                         }
                     }
@@ -1253,6 +1283,7 @@ struct Session : BackEnd {
             }
 
             // Store metadata for track visualization.
+            // 这里也是用来存储做可视化.
             if (sample.frame->taggedFrame != nullptr) {
                 TrackVisualization tv {
                         .prepareVuStatus = prepareVuStatus,
@@ -1268,6 +1299,7 @@ struct Session : BackEnd {
                 sample.frame->taggedFrame->trackVisualizations.push_back(tv);
             }
 
+            // TODO：后面再看.
             stats.visualUpdate.fullyProcessedTrack(
                 triangulateStatus,
                 prepareVuStatus,
@@ -1303,6 +1335,7 @@ struct Session : BackEnd {
 
         // roundoff errors can make the state covariance non-symmetric and the below op forces symmetry
         // it should not be needed often. Once a frame (here) is better than once per track update
+        // 这里是保证协方差的半正定性->不需要太纠结，都是定律.
         ekf->maintainPositiveSemiDefinite();
 
         blacklistedPrev.swap(tmp.blacklisted);
