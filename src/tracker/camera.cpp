@@ -350,6 +350,12 @@ public:
         }
     }
 
+    /**
+     *
+     * @param pixel
+     * @param ray
+     * @return
+     */
     bool pixelToRay(const Vector2d &pixel, Vector3d &ray) const final {
         const Vector2d uv = (inverseCameraMatrix * Vector3d(pixel.x(), pixel.y(), 1)).segment<2>(0);
         const double r = uv.norm();
@@ -468,6 +474,7 @@ public:
 
 } // anonymous namespace
 
+// 这里主要是判断反向投影后像素会不会超出可视区域，如果超出可视区域，则直接返回false，该特征点直接不要.
 bool Camera::normalizePixel(const Eigen::Vector2d &pixel, Eigen::Vector2d &out) const {
    Eigen::Vector3d ray;
    if (!pixelToRay(pixel, ray) || ray.z() <= 0) return false;

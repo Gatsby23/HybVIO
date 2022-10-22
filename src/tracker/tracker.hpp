@@ -60,6 +60,7 @@ public:
          */
         bool keyframe;
         // For visualizations.
+        // This only for visualization, not used in the next part.
         std::vector<Feature::Point> flowCorners0;
         std::vector<Feature::Point> flowCorners1;
         std::vector<Feature::Point> flowCorners2;

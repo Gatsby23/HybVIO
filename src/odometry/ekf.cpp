@@ -470,14 +470,6 @@ struct EKFImplementation : public EKF {
 
         // 将dydx给推导出来
         // 对角阵上每一个元素都是Identity，其中位置和速度的地方是Identity * dt（）
-        /*************************************************
-         *       ORI POS  VEL     BAA BGA
-         *   ORI  I
-         *   POS      I   I△t
-         *   VEL           I
-         *   BAA                 I
-         *   BGA                     I
-         ***********************************************/
         dydx.block(POS, POS, 3, 3).setIdentity(3, 3);
         dydx.block(VEL, VEL, 3, 3).setIdentity(3, 3);
         dydx.block(POS, VEL, 3, 3).setIdentity(3, 3) *= dt;
@@ -486,21 +478,11 @@ struct EKFImplementation : public EKF {
         dydx.block(BAT, BAT, 3, 3).setIdentity(3, 3);
 
         // Derivatives of the velocity w.r.t. to the quaternion
-        // 这里应该是和前面配合的简化写法->应该没必要这么复杂，就是相当于叉乘得到的结果.
-        /**************************************************************
-         *       ORI                      POS   VEL     BAA BGA
-         *   ORI  I
-         *   POS                           I    I△t
-         *   VEL  (a*△t)*R*^*R_{kk+1}            I
-         *   BAA                                         I
-         *   BGA                                             I
-         **************************************************************/
-         // 这里写的很恶心->就是将叉车反过来a×b=-b×a
+        // 速度关于旋转的求导->这里也可以看出来，没有问题，先对当前旋转求导，再对后面的求导.
+        // 为什么会有个2倍的关系，这里说实话没弄懂
         for (int i = 0; i < 4; i++) {
             dydx.block(VEL, ORI + i, 3, 1) = dR[i].transpose() * Txab * dt;
         }
-        // 这里得到的结果应该是叉乘？
-        // 这里一应该直接得到就好.
         dydx.block(VEL, ORI, 3, 4) = dydx.block(VEL, ORI, 3, 4) * A;
 
         // Derivatives of the quaternion w.r.t. itself
@@ -512,11 +494,11 @@ struct EKFImplementation : public EKF {
         dydq.block(VEL, Q_ACC, 3, 3) = R.transpose() * dt;
 
         // Derivatives of the quaternion w.r.t. gyroscope noise
+        // 对应参考论文：Quaternion ESKF，公式215.
         Eigen::Matrix4d dS0, dS1, dS2;
         dS0 << 0, dt / 2, 0, 0, -dt / 2, 0, 0, 0, 0, 0, 0, dt / 2, 0, 0, -dt / 2, 0;
         dS1 << 0, 0, dt / 2, 0, 0, 0, 0, -dt / 2, -dt / 2, 0, 0, 0, 0, dt / 2, 0, 0;
         dS2 << 0, 0, 0, dt / 2, 0, 0, dt / 2, 0, 0, -dt / 2, 0, 0, -dt / 2, 0, 0, 0;
-        // 这里是不是写的太复杂了？实际上对应的就是旋转乘以1/2的变化？
         dydq.block(ORI, Q_GYRO, 4, 1) = A * dS0 * prevQuat;
         dydq.block(ORI, Q_GYRO + 1, 4, 1) = A * dS1 * prevQuat;
         dydq.block(ORI, Q_GYRO + 2, 4, 1) = A * dS2 * prevQuat;

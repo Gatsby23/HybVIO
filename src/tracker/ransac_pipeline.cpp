@@ -65,7 +65,9 @@ public:
         parameters(parameters),
         rng(parameters.tracker.ransacRngSeed)
     {
+        //
         const auto &pt = parameters.tracker;
+
         // <http://www.theia-sfm.org/ransac.html>
         theiaRansac5Parameters.rng = std::make_shared<theia::RandomNumberGenerator>(pt.ransacRngSeed);
         theiaRansac5Parameters.error_thresh = pt.theiaRansac5ErrorThresh;

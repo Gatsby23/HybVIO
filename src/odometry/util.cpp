@@ -27,7 +27,7 @@ Eigen::Matrix3d quat2rmat(const Eigen::Vector4d& q) {
 }
 
 // Derivatives of the rotation matrix w.r.t. the quaternion of the quat2rmat() function.
-// 这里返回值对应的是和四元数一一对应的旋转矩阵，dR代表的是
+// 这里返回值对应的是和四元数一一对应的旋转矩阵，// 根据上面的公式来做求导.
 Eigen::Matrix3d quat2rmat_d(const Eigen::Vector4d& q, Eigen::Matrix3d(&dR)[4]) {
     dR[0] <<
         2*q(0), -2*q(3),  2*q(2),

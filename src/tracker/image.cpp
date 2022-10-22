@@ -71,6 +71,7 @@ public:
         int maskRadius,
         KeypointList &out) final
     {
+        // 这里多线程的方式还是比较特别.
         if (pendingFeatureDetection) {
             pendingFeatureDetection->wait();
             out = *pendingCorners;
@@ -92,9 +93,11 @@ public:
         bool useInitialCorners,
         int overrideMaxIterations) final
     {
+        // 确保开启了光流金字塔【增加稳定性】
         ensureImagePyramid();
         auto &prevCpu = reinterpret_cast<ImageImplementation&>(prev);
         prevCpu.ensureImagePyramid();
+        // 也是光流金字塔跟踪，就是
         shared.opticalFlow->compute(
             *prevCpu.imagePyramid,
             *imagePyramid,

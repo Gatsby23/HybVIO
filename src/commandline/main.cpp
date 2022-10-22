@@ -598,6 +598,7 @@ int run_algorithm(int argc, char *argv[], Visualizer &visualizer, CommandLinePar
     // 这里lambda表达式->最主要什么时候调用.
     api.onOutput = [&](std::shared_ptr<const api::VioApi::VioOutput> output) {
         outputBuffer.addProcessedFrame(output);
+        std::cout.setf(std::ios::fixed);
         if (outputFile) {
             std::string outputJson = api::outputToJson(*output, main.outputType == "tail");
             outputFile << outputJson << std::endl;

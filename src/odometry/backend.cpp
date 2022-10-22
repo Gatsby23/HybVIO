@@ -164,6 +164,9 @@ struct Session : BackEnd {
      * Temporary variables that could be defined in method bodies but are
      * included here to avoid reallocations
      */
+     /************************************************************************
+      * 这里是把visual update当中的部分先给保存下来，做成这个临时变量，后面用来三角化.
+      ***********************************************************************/
     struct Workspace {
         std::vector<unsigned> trackOrder;
         tracker::Tracker::Output trackerOutput;
@@ -569,6 +572,11 @@ struct Session : BackEnd {
         }
     }
 
+    /*********************************************************************
+     * @brief 这里是用光流来追踪特征点，并将追踪到的特征点从param2中来返回给主程序
+     * @param frame 当前图像帧.
+     * @param trackerOutput 追踪到的图像特征点.
+     ********************************************************************/
     void applyTracker(
         ProcessedFrame &frame,
         tracker::Tracker::Output &trackerOutput
@@ -695,6 +703,7 @@ struct Session : BackEnd {
         };
 
         const bool isStereo = !!frame.secondGrayFrame;
+        // 这里的Poses用于后面的跟踪.
         std::array<Eigen::Matrix4d, 2> poses;
         if (parameters.tracker.useStereoUpright2p) {
             poses = {
@@ -801,10 +810,13 @@ struct Session : BackEnd {
         bool slamFrame = false;
 
         if (sample.frame != nullptr) {
+            std::cout << "=============FRAME " << sample.frame->num << "  UPDATE============" << std::endl;
             const bool fullVisualUpdate = sample.frame->num % po.visualUpdateForEveryNFrame == 0 || !ekfStateIndex.canPopKeyframe();
             // trackerOutput是用来作为可视化使用
             auto &trackerOutput = tmp.trackerOutput;
+            // 这里是特征点光流追踪，用output来存储追踪的特征点.
             applyTracker(*sample.frame, trackerOutput);
+            // 这里的tracker output主要输出来是用于可视化的.
             // note: should actually do the stationarity checks from the last
             // "fullVisualUpdate". This logic is technically a bit flawed but
             // probably still a good approximation
@@ -831,13 +843,28 @@ struct Session : BackEnd {
             // causes every Nth (key)frame to be left in the trail
             if (!fullVisualUpdate) keyframe = false;
 
-            // 开始进行视觉更新.
+            // 这里还是跟延迟策略不一样，先是把首帧剔除
+            // 然后用现在frame帧来做更新.
+            std::cout << "Before update, the state index has: " ;
+            for(auto frame : ekfStateIndex.keyframes)
+                std::cout << frame.frameNumber << ", ";
+            std::cout << std::endl;
             if (po.visualUpdateEnabled) {
-                // 这里
+
+                /**********************************************************************************
+                 * 这里要结合下面的head操作一块理解，如果当前帧是普通帧，则把上一帧给去掉，留下的是上一个关键帧.
+                 * 然后队列的队头帧则用当前帧进行替代.
+                 * 然后再把关键帧插入到队头.这样的话，在当前帧进来前总能看到上一帧，并且能找打和它最近的关键帧.aa
+                 ***********************************************************************************/
                 if (!keyframe) {
                     ekfStateIndex.popHeadKeyframe();
                     ekf->updateUndoAugmentation();
                 }
+
+                std::cout << "The current frame is: " << (keyframe ? "key" : "") << "frame,  After pop, the state vector has: ";
+                for(auto frame : ekfStateIndex.keyframes)
+                    std::cout << frame.frameNumber << ", ";
+                std::cout << std::endl;
 
                 auto &head = ekfStateIndex.headKeyFrame();
                 head.frameNumber = sample.frame->num;
@@ -846,9 +873,12 @@ struct Session : BackEnd {
                 // 用来做视觉更新.
                 const bool goodFrame = trackerVisualUpdate(sample, trackerOutput, output, fullVisualUpdate, stationaryVisual);
 
-                // 这里是....
                 int droppedPose = ekfStateIndex.pushHeadKeyframe(sample.frame->num, sample.t);
                 ekf->updateVisualPoseAugmentation(droppedPose - 1); // different indexing
+                std::cout << "After update the " << (keyframe ? "key" : "") << "frame" << ", the index is: ";
+                for(auto frame : ekfStateIndex.keyframes)
+                    std::cout << frame.frameNumber << ", ";
+                std::cout << " and drop the " << droppedPose << " poses." << std::endl;
 
                 // 这里是fully Visual Update是什么
                 if (fullVisualUpdate) {
@@ -963,10 +993,9 @@ struct Session : BackEnd {
         tmp.blacklisted.clear();
         tmp.trackOrder.clear();
 
-        // 这里是依据tracker的结果来做.
+        // 这里是针对双目的情况，将跟踪的点三角化出来.
         for (unsigned i = 0; i < trackerOutput.tracks.size(); ++i) {
             const auto &track = trackerOutput.tracks.at(i);
-
             // Construct normalized feature points.
             const size_t frameCount = parameters.tracker.useStereo ? 2 : 1;
             bool success = false;
@@ -978,12 +1007,16 @@ struct Session : BackEnd {
                 const std::shared_ptr<tracker::Image> grayFrame = frameInd == 0
                     ? sample.frame->firstGrayFrame
                     : sample.frame->secondGrayFrame;
+                // 这里主要是判断反向投影后的特征点是不是还在可视化区域中，如果不在可视化区域中，则直接抛弃掉.
                 success = grayFrame->getCamera()->normalizePixel(feature.frames[frameInd].imagePoint, feature.frames[frameInd].normalizedImagePoint);
                 if (!success) break;
             }
 
+            // 这里是三角化当中的特征点.
+            // 默认这里是不会执行.
             if (success && po.useIndependentStereoTriangulation) {
                 Eigen::Vector3d idp;
+                // 这里是三角化->并且能得到三角化后的Cov.
                 success = triangulateStereoFeatureIdp(
                     feature.frames[0].normalizedImagePoint,
                     feature.frames[1].normalizedImagePoint,
@@ -1010,8 +1043,10 @@ struct Session : BackEnd {
 
         // Remove all keyframes that do not share any tracks with the current frame.
         // Also remove all hybrid EKF SLAM map points that are no longer LK-tracked
+        // 将状态中和当前帧没有关联的关键帧全部去掉，并且没有跟踪关联上的地图点也去掉
         ekfStateIndex.prune();
 
+        // 这里是可视化，将三角化后的点给创建出来.
         if (sample.frame->taggedFrame != nullptr) {
             ekfStateIndex.getVisualizationTracks(sample.frame->taggedFrame->trackerTracks);
         }
@@ -1032,6 +1067,7 @@ struct Session : BackEnd {
         }
 
         float minTrackScore = 0.0;
+        // 这里看起来是做了一次筛选，只把当中大于光心距离一半的图像点给保存下来
         if (po.scoreVisualUpdateTracks) {
             // Sort tracks by frame length and consider only the half with longer tracks.
             // Besides increasing the average length of used tracks, this allows making
@@ -1050,6 +1086,7 @@ struct Session : BackEnd {
         }
 
         // adaptive threshold, start with base value, increase on failures
+        // 这里是做特种筛选，过滤掉一些不重要的特征.
         double rmseThreshold = po.trackRmseThreshold / output.focalLength;
         double chiOutlierR = po.trackChiTestOutlierR / output.focalLength;
         const double visualR = po.visualR / output.focalLength;
@@ -1060,23 +1097,28 @@ struct Session : BackEnd {
         auto &Hbatch = tmp.H;
         auto &ybatch = tmp.y;
         auto &fbatch = tmp.f;
+        // 有些批量更新，有些不是批量更新
         const bool batchUpdate = po.batchVisualUpdate || !fullVisualUpdate;
+        // 如果选择的是批量更新算法【但每个feature update，怎么来做批量更新.】
         if (batchUpdate) {
             Hbatch = Eigen::MatrixXd::Zero(maxUpdateSize, ekf->getStateDim());
             ybatch = Eigen::VectorXd::Zero(maxUpdateSize);
             fbatch = Eigen::VectorXd::Zero(maxUpdateSize);
         }
-
         // 这里的tmp.trackOder是每一个tracker的情况.
+        // 对之前跟踪出来的特征来进行tracker update.
         for (const unsigned trackIndex : tmp.trackOrder) {
             stats.visualUpdate.newTrack();
 
             const auto &track = trackerOutput.tracks.at(trackIndex);
+            // 开了hybrid才会打开，平时不会关心.
             const bool mapPointUpdate = tmp.mapPointIndex.count(track.id);
+            if(mapPointUpdate) std::cout << "The mappoint update is: " << mapPointUpdate << "for track " << track.id << std::endl;
             ekfStateIndex.createTrackIndex(track.id, tmp.poseTrailIndex, po.trackSampling, rng);
             const int nValid = static_cast<int>(tmp.poseTrailIndex.size());
-
+            // 如果没有的情况下
             if (!mapPointUpdate) {
+                // 看看跟踪的结果怎么样，如果合适的话，才能用来做tracking update->得看下里面细节，再想想全景的时候能不能无脑调用.
                 const float score = ekfStateIndex.trackScore(track.id, po.trackSampling);
                 if (po.scoreVisualUpdateTracks && score < minTrackScore) {
                     stats.visualUpdate.notEnoughFrames(); // TODO: not optimally named for "scores"
@@ -1095,6 +1137,7 @@ struct Session : BackEnd {
             // Skip blacklisted tracks.
             // The needMoreVisualUpdates check is not strictly necessary here
             // but included to avoid changing the results
+            // 跳过不重要的更新点.
             if (po.blacklistTracks &&
                     std::find(blacklistedPrev.begin(), blacklistedPrev.end(), track.id) != blacklistedPrev.end() &&
                     needMoreVisualUpdates) {
@@ -1108,11 +1151,12 @@ struct Session : BackEnd {
             tmp.featureVelocities.clear();
             // 是多个像素块来更新还是每个feature来进行更新？
             auto &y = batchUpdate ? tmp.yblock : tmp.y;
-            // 构建追踪向量
+            // 构建追踪向量，用来做后面的跟踪情况.
             ekfStateIndex.buildTrackVectors(track.id, tmp.poseTrailIndex, tmp.imageFeatures,
                 tmp.featureVelocities, y, parameters.tracker.useStereo);
 
             // NOTE: do not reuse, the trail changes on each visual update!
+            // 主要是依据poseTrailIndex来抽取出camera pose放到tmp.trail中，用于后面的visual update.
             extractCameraPoseTrail(*ekf, tmp.poseTrailIndex,
                 parameters, parameters.tracker.useStereo, tmp.trail);
 
@@ -1121,6 +1165,7 @@ struct Session : BackEnd {
                 ekfStateIndex.extract3DFeatures(track.id, tmp.poseTrailIndex, tmp.trail);
             }
 
+            // 这里使用来做visual update了.
             if (sharedData->odometryDebugAPI && sharedData->odometryDebugAPI->publisher) {
                 sharedData->odometryDebugAPI->publisher->startVisualUpdate(
                     sample.t, *ekf, tmp.poseTrailIndex, tmp.imageFeatures, parameters);
@@ -1132,10 +1177,14 @@ struct Session : BackEnd {
               .firstPixel = Eigen::Vector2f(track.points[0].x, track.points[0].y),
             };
 
+            // 三角化输出的结果.
             auto &triangulationOut = tmp.triangulationArgsOut;
             TriangulatorStatus triangulateStatus;
             int mapPointIndex = -1;
+            // 如果有hyb mappoint的话，则这里需要把triangulate部分调成hybrid来做.
+            // 当状态量中有hyb mappoint点时
             if (mapPointUpdate) {
+                // 这里应该是直接初始化.
                 triangulateStatus = TriangulatorStatus::HYBRID;
                 mapPointIndex = tmp.mapPointIndex.at(track.id);
                 assert(mapPointIndex >= 0);
@@ -1144,6 +1193,8 @@ struct Session : BackEnd {
                 triangulationOut.dpfdq.clear();
                 pointCloudFeature.status = PointFeature::Status::HYBRID;
             } else {
+                // 先进行三角化.
+                std::cout << "Prepare to do the triangulator." << std::endl;
                 const TriangulationArgsIn args {
                     .imageFeatures = tmp.imageFeatures,
                     .featureVelocities = tmp.featureVelocities,
@@ -1156,19 +1207,22 @@ struct Session : BackEnd {
                 // 现在得明确哪块三角化的点用来做更新.
                 triangulateStatus = triangulator.triangulate(args, triangulationOut,
                     sharedData->odometryDebugAPI);
-
+                // 得到三角化后的输出信息.
                 auto &o = tmp.triangulationArgsOut;
+
                 double depth = (o.pf - tmp.trail.at(0).p).norm();
+                // 先判断，如果这里的depth较小或过大的话，则这个三角化出来的值并不适用于来做visual update，将值设定为BAD_DEPTH.
                 if (depth < po.triangulationMinDist || depth > po.triangulationMaxDist) {
                     triangulateStatus = TriangulatorStatus::BAD_DEPTH;
                 }
 
+                // 如果并不是OK的话，则可以直接返回了，这里的jacobian可以直接置为0.
                 if (triangulateStatus != TriangulatorStatus::OK) {
                     // The triangulation function can return early and these may or may not be empty.
                     o.dpfdp.clear();
                     o.dpfdq.clear();
                 }
-
+                // 如果是双目，并且状态是OK的话，则做一系列初始化的操作.
                 if (parameters.tracker.useStereo && triangulateStatus == TriangulatorStatus::OK) {
                     // Sum the stereo contributions per pose.
                     const size_t n = tmp.poseTrailIndex.size();
@@ -1184,6 +1238,7 @@ struct Session : BackEnd {
                 pointCloudFeature.status = PointFeature::Status::POSE_TRAIL;
 
                 // only count the heavy triangulated versions "update attempts"
+                // 记录下来这里是尝试进行了一次update.
                 updateAttemptCount++;
             }
 
@@ -1201,6 +1256,7 @@ struct Session : BackEnd {
             auto &H = batchUpdate ? tmp.Hblock : tmp.H;
             auto &f = batchUpdate ? tmp.fblock : tmp.f;
 
+            // 准备好用来做Update的变量.
             const PrepareVisualUpdateArgsIn args {
                 .triangulationOut = triangulationOut,
                 .featureVelocities = tmp.featureVelocities,
@@ -1212,6 +1268,7 @@ struct Session : BackEnd {
                 .mapPointOffset = ekf->getMapPointStateIndex(mapPointIndex),
                 .estimateImuCameraTimeShift = parameters.odometry.estimateImuCameraTimeShift,
             };
+            //
             const auto prepareVuStatus = prepareVisualUpdate(args, H, f);
 
             // Criteria for skipping remaining code that does the critical visual update.

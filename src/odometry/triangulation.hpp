@@ -37,6 +37,7 @@ struct CameraPose {
     Eigen::Matrix3d feature3DCov;
 };
 
+// 保存Camera Pose的序列集合.
 using CameraPoseTrail = std::vector<CameraPose, Eigen::aligned_allocator<CameraPose>>;
 
 struct TriangulationArgsOut {

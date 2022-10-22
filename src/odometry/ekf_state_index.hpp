@@ -29,7 +29,9 @@ struct Feature {
     struct Frame {
         EIGEN_MAKE_ALIGNED_OPERATOR_NEW
         // TODO: change to 3D camera ray
+        // 这里是真实的2D点feature.
         Eigen::Vector2d imagePoint;
+        // 这里是归一化后的像素点坐标.
         Eigen::Vector2d normalizedImagePoint;
         // Velocity in `normalizedImagePoint` units per seconds, estimated from successive frames.
         Eigen::Vector2d normalizedVelocity;
@@ -79,7 +81,7 @@ struct KeyFrame {
 
 // 这里应该主要说的是EKF当中的滑窗情况，里面包含了用到的关键帧和特征点.
 class EKFStateIndex {
-private:
+public:
     const odometry::ParametersOdometry &parameters;
     std::vector<KeyFrame> keyframes;
     int frameCounter = 0;
@@ -92,8 +94,8 @@ private:
     std::vector<int> mapPoints;
     std::vector<int> tmpIndex;
 
-    // remove the "least useful" keyframe and return the index from
-    // which it was removed
+    // remove the "least useful" keyframe and return the index from which it was removed
+    // 删除掉最不重要的关键帧.
     int removeKeyframe();
 
     size_t maxSize() { return parameters.cameraTrailLength + 1; }
@@ -105,9 +107,11 @@ public:
     {
         assert(parameters.cameraTrailHanoiLength + parameters.cameraTrailStridedLength + 1 < int(maxSize()));
         assert(parameters.randomTrackSamplingRatio > 0.0 && parameters.randomTrackSamplingRatio <= 1.0);
+        // 这里是添加头部关键帧
         pushHeadKeyframe(0, 0);
     }
 
+    // 当帧中有超过2个视觉帧，就可以pop掉了.
     bool canPopKeyframe() const { return keyframes.size() >= 2; }
 
     /** @return the index of the least useful removed keyframe */
@@ -158,6 +162,8 @@ public:
         }
     }
 
+
+    // 拿到头帧
     KeyFrame &headKeyFrame() { return keyframes.at(0); }
 
     /**************************************************************************

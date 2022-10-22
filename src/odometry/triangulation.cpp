@@ -3,6 +3,9 @@
 #include "ekf.hpp"
 #include "debug.hpp"
 
+#include <iostream>
+
+
 #include "../util/logging.hpp"
 #include "../tracker/camera.hpp"
 
@@ -62,6 +65,7 @@ bool isBehind(const Eigen::Vector3d &pf, const odometry::CameraPoseTrail &trail)
 namespace odometry {
 
 // Extract camera poses from the EKF state.
+// 从EKF的状态量中抽取出Camera的Pose信息->对他们求jacobian？
 void extractCameraPoseTrail(
     const odometry::EKF& ekf,
     const std::vector<int> &poseTrailIndex,
@@ -77,15 +81,19 @@ void extractCameraPoseTrail(
         // Check the default sentinel value has been changed.
         assert(imuToCam != Eigen::Matrix4d::Zero());
         Eigen::Matrix3d d_worldToCameraRot[4];
+        // 这个是IMU转到Camera的Rotation.
         const Eigen::Matrix3d imuToCameraRot = imuToCam.topLeftCorner<3, 3>();
+        // 这个是IMU到Camera的外参的translation.
         const Eigen::Vector3d baseline = imuToCam.block<3, 1>(0, 3);
 
         for (int i : poseTrailIndex) {
+            // 取出当前的pose.
             const Eigen::Vector3d p = ekf.historyPosition(i - 1);
             const Eigen::Vector4d q = ekf.historyOrientation(i - 1);
             assert(!p.hasNaN() && !q.hasNaN());
-
+            // 世界系下:world->camera * camera->imu => world->imu.
             Eigen::Matrix3d worldToCameraRot = imuToCameraRot * util::quat2rmat_d(q, d_worldToCameraRot);
+            // 构建出相机在世界系下的pose.
             CameraPose pose = {
                 .p = p - worldToCameraRot.transpose() * baseline,
                 .R = worldToCameraRot,
@@ -97,6 +105,7 @@ void extractCameraPoseTrail(
                 pose.dR[j] = imuToCameraRot * d_worldToCameraRot[j];
                 assert(!pose.dR[j].hasNaN());
             }
+            // 把这些pose都放到trail里，供后面他们使用.
             trail.push_back(pose);
         }
     }
@@ -117,6 +126,7 @@ Triangulator::Triangulator(const ParametersOdometry &parameters) :
 // Compute triangulated 3d position of a feature given track in image coordinates and
 // associated camera poses.
 // False return value indicates a singular result (that will likely cause issues later in the algorithm pipeline).
+// 图像坐标系下的像素点和对应的相机pose来进行三角化，如果说出现奇异值的话，则返回False.
 TriangulatorStatus Triangulator::triangulate(
     const TriangulationArgsIn &args,
     TriangulationArgsOut &out,
@@ -129,8 +139,11 @@ TriangulatorStatus Triangulator::triangulate(
     using Eigen::MatrixXd;
     using Eigen::Matrix;
 
+    // 图像的像素特征.
     const vecVector2d &imageFeatures = args.imageFeatures;
+    // 像素特征的速度.
     const vecVector2d &featureVelocities = args.featureVelocities;
+    // 这里应该是序列的Pose.
     const CameraPoseTrail &trail = args.trail;
     Eigen::Vector3d &pf = out.pf;
 
@@ -143,6 +156,8 @@ TriangulatorStatus Triangulator::triangulate(
     assert(poseCount >= 2);
     if (args.estimateImuCameraTimeShift) assert(imageFeatures.size() == featureVelocities.size());
 
+    // 直接线性三角化出来3D Visual点.
+    // 使用线性化三角化方法来直接将3D点算出来->这里默认是关闭的.
     if (parameters.useLinearTriangulation) {
         TriangulatorStatus status = triangulateLinear(args, out);
         if (debug) {
@@ -154,8 +169,10 @@ TriangulatorStatus Triangulator::triangulate(
     // Use first and last pose for initial triangulation because they are likely
     // to most differ from each other.
     const size_t ind0 = 0;
+    // 这里poseCout - 1 应该表示的是用滑窗首尾帧来实现三角化
     const size_t ind1 = (args.stereo ? poseCount / 2 - 1 : poseCount - 1);
     Matrix<double, 3, 2 * POSE_DIM + 1> dpfTwoCameras;
+    // 这里是三角化中用到的信息.
     const TwoCameraTriangulationArgsIn twoArgs {
         .pose0 = trail.at(ind0),
         .pose1 = trail.at(ind1),
@@ -168,13 +185,16 @@ TriangulatorStatus Triangulator::triangulate(
         .derivativeTest = args.derivativeTest,
         .imuToCameraTimeShift = args.imuToCameraTimeShift,
     };
-    // 这里是构建三角点的方法
+    // 这里是构建三角点的方法【用滑窗里的第一帧和最后一帧来进行三角化】
+    // 先用两个Pose算出pf点的位置.
     pf = triangulateWithTwoCameras(twoArgs, &dpfTwoCameras);
     assert(!pf.hasNaN());
     // `pf` and rest of this function take place in the coordinates of `ind0`.
 
     // Inverse depth parametrisation.
+
     Matrix3d dpfi_dpf;
+    // 对特征点取逆深度，dpfi_dpf是对逆深度求导.
     Vector3d pfi = inverseDepth(pf, dpfi_dpf);
     assert(!pfi.hasNaN()); // Can pf(2) == 0?
 
@@ -184,6 +204,7 @@ TriangulatorStatus Triangulator::triangulate(
     }
 
     const size_t dDim = args.calculateDerivatives ? poseCount * POSE_DIM : 0;
+    // 都是用一半的最后一个点，如果是双目的话，则取一半的最后一帧（左目相机的最后一帧）.
     const size_t secondPoseIdx = (args.stereo ? poseCount / 2 - 1 : poseCount - 1);
     // TODO: for stereo mode: to check if it is beneficial to use the last frame from the second camera instead of the reference camera
     //  to do it - you need to alter derivatives inference in triangulateWithTwoCameras
@@ -212,6 +233,7 @@ TriangulatorStatus Triangulator::triangulate(
     const Vector3d &p0 = trail[0].p;
     Eigen::Vector3d dEerrordt;
 
+    // 明天将这里结算出来，并且把probability给抽取出来.
     for (unsigned optIter = 0; optIter < parameters.triangulationGaussNewtonIterations; optIter++) {
         // Gauss-Newton left-hand-side (ETE) and right-hand-side (Eerror)
         Matrix3d ETE = Matrix3d::Zero();
@@ -237,6 +259,7 @@ TriangulatorStatus Triangulator::triangulate(
             const double ih2sq = 1.0 /(h(2)*h(2));
 
             Vector2d errorBlock = imageFeatures[i] - h02 / h(2);
+            // 如果增加了时间估计项，则再加一维，如果没的话，则直接跳过
             if (args.derivativeTest && args.estimateImuCameraTimeShift) {
                 errorBlock += args.imuToCameraTimeShift * featureVelocities[i];
             }
@@ -380,6 +403,7 @@ TriangulatorStatus Triangulator::triangulate(
     // could be another useful test. Matlab source might do it.
 
     // convert "dpfi" (inverse depth) back to "dpf" (xyz)
+    // 这里将结果转换为feature的xyz结果，而不是inverse表示.
     // skipped if !calculateDerivatives
     for (size_t j = 0; j < dDim + 1; ++j) {
         Vector3d dp0 = Vector3d::Zero();
@@ -907,14 +931,18 @@ PrepareVuStatus prepareVisualUpdate(
     assert(nValid > 0);
 
     int endIdx = 0;
+    // 这里truncated主要判断是否是批量更新.
     if (args.truncated) {
         // truncate H matrix to save CPU cycles with short tracks
+        //
         for (int idx : poseTrailIndex) {
             int jPos, jOri;
             getPosOriIndices(idx, jPos, jOri);
+            // 这里主要是因为有point和pose混在一块，所以需要对比.
             endIdx = std::max(endIdx, std::max(jPos + 3, jOri + 4));
         }
         if (args.mapPointOffset > 0) {
+            // 如果有hybMap点的话，则最后一帧肯定是在点.
             endIdx = args.mapPointOffset + 3;
         }
     } else {
@@ -935,6 +963,7 @@ PrepareVuStatus prepareVisualUpdate(
         Eigen::Vector3d pfc = pose.R * pt;
 
         // Check if the point is behind camera.
+        // 判断这里相机是否在背面.
         if (pfc(2) == 0) {
             log_debug("Point depth 0.");
             // This is fatal for processing this track.
@@ -966,6 +995,7 @@ PrepareVuStatus prepareVisualUpdate(
         H.block<2, 3>(2 * i, iPos) = -dip * pose.R;
         H.block<2, 4>(2 * i, iOri) = dip * dRpt;
 
+        // 如果有hybmapsize的值才会进行继续构建.
         if (args.triangulationOut.dpfdp.size() > 0) {
             const auto &o = args.triangulationOut;
             assert(o.dpfdp.size() == poseTrailIndex.size());

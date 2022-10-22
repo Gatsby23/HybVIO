@@ -11,6 +11,8 @@
 #include "ransac_pipeline.hpp"
 #include "../odometry/util.hpp"
 
+#include <iostream>
+
 // private helper functions
 namespace {
 inline double computeDist2(const tracker::Feature::Point &p1, const tracker::Feature::Point &p2) {
@@ -56,12 +58,13 @@ void computeOpticalFlow(
     timer(odometry::TIME_STATS, __FUNCTION__);
 
     bool useInitialCorners = false;
+    // 这里用的是之前定义的函数来做检测，保留下来光流正确的点.
     if (opticalFlowPredictor) {
         if (parameters.predictOpticalFlow) {
             useInitialCorners = true;
             opticalFlowPredictor.func(prevCorners, tracks, corners, predictionType);
         }
-        // Save predictions for visualization.
+        // Save predictions for visualization【这里主要用来可视化】.
         if (parameters.saveOpticalFlow == odometry::OpticalFlowVisualization::PREDICT
                 && visualizedKind) {
             opticalFlowPredictor.func(prevCorners, tracks, flowCorners, predictionType);
@@ -175,6 +178,9 @@ TrackerImplementation::TrackerImplementation(const odometry::Parameters &paramet
 
 TrackerImplementation::~TrackerImplementation() = default;
 
+
+
+// 这里注明了函数并不是线程安全的【后续需要改和修复吗？】
 void TrackerImplementation::add(
     const TrackerArgsIn &args,
     tracker::Tracker::Output &output
@@ -205,7 +211,7 @@ void TrackerImplementation::add(
     }
 
     frameNum++;
-
+    // 如果检测出来的特征点超过5个，则可以直接进行跟踪.
     if (prevCorners.size() >= 5) {
         // The tracking algorithms need at least five feature points to work with.
         // RANSAC, which is the only component using the camera(s) in tracker,
@@ -220,6 +226,7 @@ void TrackerImplementation::add(
         );
     }
     else {
+        // 这里感觉和initialize很像，只是没有初始化ransac模块.
         setMask({}, {}); // clear mask
         detectFeatures(firstImage, secondImage,
             workspace.corners, workspace.secondCorners, output);
@@ -231,6 +238,7 @@ void TrackerImplementation::add(
     prevFrameTime = args.t;
 
     // note that the original image data has already been copied at this point
+    // 在这里将Original的图像拷贝到prev image中.
     std::swap(workspace.curImage, prevImage);
     if (args.secondImage) {
         std::swap(workspace.curSecondImage, prevSecondImage);
@@ -238,18 +246,29 @@ void TrackerImplementation::add(
     logTracks();
 }
 
+/**************************************************
+ * @brief 特征点检测算法
+ * @param image 双目中的左目.
+ * @param secondImage 双目中的右目
+ * @param corners 左目图像中的特征点->用于可视化？
+ * @param secondCorners 右目图像中的特征点->用于可视化？
+ * @param output 输出结果
+ *************************************************/
 void TrackerImplementation::detectFeatures(
     Image& image, Image* secondImage,
     std::vector<Feature::Point>& corners, std::vector<Feature::Point>& secondCorners,
     Output &output
 ) {
+    // 这里应该是获得camera对应的参数.
     const auto &camera0 = *image.getCamera();
     const odometry::ParametersTracker &pt = parameters.tracker;
     {
         timer(odometry::TIME_STATS, "findKeypoints");
+        // 检测特征点.
         image.findKeypoints(maskCorners, maskRadius(image), corners);
     }
 
+    // 双目的特征点暂时不看.
     bool stereo = secondImage != nullptr;
     if (stereo) {
         std::vector<Feature::Point> flowCorners;
@@ -292,11 +311,13 @@ void TrackerImplementation::detectFeatures(
     }
 
     markOutOfDetectionCropCornersAsFailed(image, corners, workspace.detectionStatus);
+    // 如果是双目的情况.
     if (stereo) {
         markOutOfDetectionCropCornersAsFailed(*secondImage, secondCorners, workspace.detectionStatus);
     }
 
     int p = 0;
+    // 那就开始标注当前所有的数据开始做跟踪.
     for (int i = 0; i < static_cast<int>(corners.size()); ++i) {
         if (workspace.detectionStatus[i] == Feature::Status::TRACKED)
         {
@@ -319,6 +340,12 @@ bool TrackerImplementation::isPointInCrop(const Image &image, Feature::Point poi
     return point.x >= x_delta && point.x < image.width - x_delta && point.y >= y_delta && point.y < image.height - y_delta;
 }
 
+/***************************************
+ * @brief 超过图像的区域则将特征点直接抛弃掉
+ * @param image
+ * @param corners
+ * @param trackStatus
+ **************************************/
 void TrackerImplementation::markOutOfDetectionCropCornersAsFailed(
         const Image& image,
         const std::vector<Feature::Point>& corners,
@@ -383,15 +410,19 @@ void TrackerImplementation::track(
     const TrackerArgsIn &args,
     Output &output
 ) {
+    // 获得相机参数.
     const auto &camera0 = *image.getCamera();
-
+    // 特征点跟踪参数
     const odometry::ParametersTracker &pt = parameters.tracker;
+    // 特征点跟踪状态.
     auto &trackStatus = workspace.trackStatus;
     using FlowCornerVec = std::vector<Feature::Point>;
+    // 判断是不是使用双目.
     bool useStereo = secondImage != nullptr;
 
     FlowCornerVec flowCorners;
     assert(prevImage);
+    // 计算光流.
     computeOpticalFlow(
         pt,
         *prevImage,
@@ -486,6 +517,7 @@ void TrackerImplementation::track(
         workspace.allCameras = {{&camera0, &camera0}};
         workspace.allCorners = {{&prevCorners, &corners}};
     }
+    // 计算出来ransac的score。
     const double ransacStationarityScore =
         ransac->compute(workspace.allCameras, workspace.allCorners, args.poses, trackStatus);
 
@@ -527,6 +559,7 @@ void TrackerImplementation::track(
     output.keyframe = frameNum < pt.maxTrackLength ||
         !computeVisualStationarity(corners, trackStatus, ransacStationarityScore, args.t);
 
+    // 更新追踪结果？
     updateTracks(corners, secondCorners, trackStatus, output.tracks, output.keyframe);
     detectNewFeatures(image, secondImage, output);
     if (useStereo && pt.computeDenseStereoDepth) computeDenseStereoDepth(image, *secondImage, output);
@@ -676,6 +709,7 @@ void TrackerImplementation::detectNewFeatures(Image& firstImage, Image* secondIm
 
     size_t maxTracks = static_cast<size_t>(parameters.tracker.maxTracks);
     assert(tracks.size() <= maxTracks);
+    // 最大特征数量减去当前特征数量，说明丢失的特征数量.
     size_t missing = maxTracks - tracks.size();
 
     const bool stereo = secondImage != nullptr;
@@ -683,6 +717,7 @@ void TrackerImplementation::detectNewFeatures(Image& firstImage, Image* secondIm
     // Feature detection is the slowest part of the algorithm so skip it when
     // we already have almost all the track spots filled. In future we might
     // want to investigate alternative feature detection algorithms.
+    // 这里是跟VINS反过来的，如果检测出来丢带的特征数量超过整体特征数量的1/10，则重新进行特征提取.
     if (missing >= maxTracks / 10) {
         detectFeatures(firstImage, secondImage,
             workspace.corners, workspace.secondCorners, output);
@@ -746,12 +781,20 @@ void TrackerImplementation::logTracks() {
     }
 }
 
+/***********************************************************************************
+ * @brief Initialize当中主要包含的操作：构建RANSAC筛选机制、特征检测、可视化赋值、输出结果.
+ * @param firstImage
+ * @param secondImage
+ * @param output
+ **********************************************************************************/
 void TrackerImplementation::initialize(Image& firstImage, Image* secondImage, Output &output)
 {
+    // 依据图像长宽来创建ransac算法【这里的ransac算法主要是从theia库中抽取出来，和论文3.3节末尾提到的3点法和5点法相关】.
     ransac = RansacPipeline::build(firstImage.width, firstImage.height, parameters);
 
     detectFeatures(firstImage, secondImage,
         workspace.corners, workspace.secondCorners, output);
+    // 这里我的理解还是做可视化，不知道对不对.
     resetAllTracks(workspace.corners, workspace.secondCorners);
 
     prevCorners = workspace.corners;

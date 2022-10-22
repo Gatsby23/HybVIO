@@ -20,6 +20,12 @@ inline size_t sizeForRandomTrack(double randomTrackSamplingRatio, size_t n) {
 }
 }
 
+/******************************
+ * @brief 放入关键帧，放到头部，
+ * @param frameNumber 关键帧的id
+ * @param timestamp 对应的时间戳.
+ * @return 需要删除的pose id.
+ *****************************/
 int EKFStateIndex::pushHeadKeyframe(int frameNumber, double timestamp) {
     int removedIdx = maxSize() - 1;
     if (keyframes.size() > maxSize() - 1) {
@@ -30,6 +36,7 @@ int EKFStateIndex::pushHeadKeyframe(int frameNumber, double timestamp) {
     return removedIdx;
 }
 
+// 每次是将头帧给弹出，然后进行后续补充（头帧是最老的帧）
 void EKFStateIndex::popHeadKeyframe() {
     assert(!keyframes.empty());
     keyframes.erase(keyframes.begin());
@@ -38,6 +45,7 @@ void EKFStateIndex::popHeadKeyframe() {
     keyframes.begin()->features.clear();
 }
 
+// 追踪得分.
 float EKFStateIndex::trackScore(int trackId, TrackSampling selection) const {
     size_t length = 0;
     float score = 0;
@@ -218,14 +226,17 @@ void EKFStateIndex::buildTrackVectors(
 }
 
 void EKFStateIndex::prune() {
+    // 返回State序列中的第一帧.
     const auto &kfRef = headKeyFrame();
 
     // prune map points
+    // 如果这一点不在索引中，则mapPoint的TrackId清除.
     for (int &mapPointTrackId : mapPoints) {
         if (!kfRef.features.count(mapPointTrackId)) mapPointTrackId = -1;
     }
 
     // prune features & keyframes
+    // 对keyframe中的feature进行筛选和清除.
     for (std::size_t i = 1; i < keyframes.size(); ++i) {
         auto &features = keyframes.at(i).features;
         auto featureItr = features.begin();
